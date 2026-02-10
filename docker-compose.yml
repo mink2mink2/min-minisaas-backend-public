@@ -1,0 +1,116 @@
+version: "3.8"
+
+services:
+  # ===================
+  # Backend (FastAPI)
+  # ===================
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: minisaas-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/minisaas
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    networks:
+      - backend-net
+    volumes:
+      - ./api/app:/app/app:ro  # Dev: hot reload
+
+  # ===================
+  # Database (PostgreSQL)
+  # ===================
+  db:
+    image: postgres:15-alpine
+    container_name: minisaas-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: minisaas
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================
+  # Cache & Pub/Sub (Redis)
+  # ===================
+  redis:
+    image: redis:7-alpine
+    container_name: minisaas-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================
+  # Message Queue (RabbitMQ)
+  # ===================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: minisaas-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    env_file: .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - backend-net
+
+  # ===================
+  # Admin Tools (Dev)
+  # ===================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: minisaas-pgadmin
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - backend-net
+    profiles:
+      - dev
+
+networks:
+  backend-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
