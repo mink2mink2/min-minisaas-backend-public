@@ -28,3 +28,4 @@ class Device(BaseModel):
     # Metadata
     description = Column(Text, nullable=True)
     last_seen = Column(DateTime, nullable=True)  # 마지막 활동 시간
+    secret_rotated_at = Column(DateTime, nullable=True)  # 마지막 시크릿 로테이션 시간

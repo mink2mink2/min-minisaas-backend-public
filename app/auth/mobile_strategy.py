@@ -1,11 +1,12 @@
 """Mobile 플랫폼 인증 전략 - Firebase JWT (Stateless)"""
 import time
 from typing import Dict, Any
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from app.auth.base import AuthStrategy, AuthResult
 from app.auth.firebase_verifier import firebase_verifier
 from app.auth.jwt_manager import jwt_manager
+from app.core.exceptions import AuthException
 
 
 class MobileAuthStrategy(AuthStrategy):
@@ -21,12 +22,15 @@ class MobileAuthStrategy(AuthStrategy):
         # Authorization 헤더에서 토큰 추출
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(401, "Missing or invalid Authorization header")
+            raise AuthException("INVALID_TOKEN", 401)
 
         token = auth_header[7:]  # "Bearer " 제거
 
         # Firebase JWT 검증
-        payload = await firebase_verifier.verify(token)
+        try:
+            payload = await firebase_verifier.verify(token)
+        except Exception:
+            raise AuthException("INVALID_TOKEN", 401)
 
         # JWT 재사용 방지 체크
         iat = payload.get("iat", int(time.time()))
@@ -39,7 +43,7 @@ class MobileAuthStrategy(AuthStrategy):
         )
 
         if not is_new:
-            raise HTTPException(401, "JWT already used")
+            raise AuthException("INVALID_TOKEN", 401)
 
         # AuthResult 반환
         return AuthResult(
@@ -83,12 +87,15 @@ class MobileAuthStrategy(AuthStrategy):
         # Authorization 헤더에서 토큰 추출
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(401, "Missing or invalid Authorization header")
+            raise AuthException("INVALID_TOKEN", 401)
 
         token = auth_header[7:]
 
         # Firebase JWT 검증
-        payload = await firebase_verifier.verify(token)
+        try:
+            payload = await firebase_verifier.verify(token)
+        except Exception:
+            raise AuthException("INVALID_TOKEN", 401)
 
         return {
             "valid": True,
@@ -99,6 +106,4 @@ class MobileAuthStrategy(AuthStrategy):
         """
         Firebase SDK가 자동 갱신하므로 서버에서 처리 불필요
         """
-        raise HTTPException(
-            501, "Mobile uses Firebase SDK auto-refresh"
-        )
+        raise AuthException("AUTHENTICATION_FAILED", 501)

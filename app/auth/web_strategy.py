@@ -1,13 +1,14 @@
 """Web 플랫폼 인증 전략 - Firebase JWT → Server Session + HttpOnly Cookie"""
 import time
 from typing import Dict, Any, Optional
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from app.auth.base import AuthStrategy, AuthResult
 from app.auth.firebase_verifier import firebase_verifier
 from app.auth.jwt_manager import jwt_manager
 from app.auth.session_manager import session_manager
 from app.core.config import settings
+from app.core.exceptions import AuthException
 
 
 class WebAuthStrategy(AuthStrategy):
@@ -23,12 +24,15 @@ class WebAuthStrategy(AuthStrategy):
         # Authorization 헤더에서 토큰 추출
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(401, "Missing or invalid Authorization header")
+            raise AuthException("INVALID_TOKEN", 401)
 
         token = auth_header[7:]  # "Bearer " 제거
 
         # Firebase JWT 검증
-        payload = await firebase_verifier.verify(token)
+        try:
+            payload = await firebase_verifier.verify(token)
+        except Exception:
+            raise AuthException("INVALID_TOKEN", 401)
 
         # JWT 재사용 방지 체크
         iat = payload.get("iat", int(time.time()))
@@ -41,7 +45,7 @@ class WebAuthStrategy(AuthStrategy):
         )
 
         if not is_new:
-            raise HTTPException(401, "JWT already used")
+            raise AuthException("INVALID_TOKEN", 401)
 
         # AuthResult 반환
         return AuthResult(
@@ -57,17 +61,30 @@ class WebAuthStrategy(AuthStrategy):
 
     async def create_session(self, auth_result: AuthResult) -> dict:
         """
-        1. 기존 세션 파괴 (동시 세션 1개 제한)
-        2. 새 세션 생성
-        3. 세션 정보 반환
+        1. 로그인 전 쿠키에서 old session ID 추출 (Session Fixation 방지)
+        2. Old session ID 파괴 (공격자가 미리 설정했을 수 있으므로)
+        3. 기존 사용자 세션 파괴 (동시 세션 1개 제한)
+        4. 새 세션 생성
+        5. 세션 정보 반환
         """
-        # 기존 세션 파괴
+        # 🔴 Step 1: Session Fixation 공격 방지
+        # 공격 시나리오: 공격자가 session=ATTACKER_ID를 미리 쿠키에 설정
+        # → 사용자 로그인 시 같은 쿠키 ID를 사용하면 공격자도 접근 가능
+        # 해결: 로그인 전 쿠키의 session ID를 명시적으로 파괴
+        request = auth_result.metadata.get("request")
+        if request:
+            old_session_id = request.cookies.get("session")
+            if old_session_id:
+                # Old session이 있으면 파괴 (있든 없든 상관없음)
+                await session_manager.destroy(old_session_id)
+
+        # Step 2: 기존 사용자 세션 파괴 (동시 세션 1개 제한)
         await session_manager.destroy_user_sessions(auth_result.user_id)
 
-        # 새 세션 생성
+        # Step 3: 새 세션 생성 (항상 새로운 ID)
         session_id = await session_manager.create(auth_result.user_id)
 
-        # 세션 정보 반환
+        # Step 4: 세션 정보 반환
         return {
             "session_id": session_id,
             "expires": auth_result.expires,
@@ -121,11 +138,11 @@ class WebAuthStrategy(AuthStrategy):
         """
         session_id = request.cookies.get("session")
         if not session_id:
-            raise HTTPException(401, "No session cookie")
+            raise AuthException("SESSION_EXPIRED", 401)
 
         session_data = await session_manager.validate_and_slide(session_id)
         if not session_data:
-            raise HTTPException(401, "Session expired or invalid")
+            raise AuthException("SESSION_EXPIRED", 401)
 
         return {
             "valid": True,

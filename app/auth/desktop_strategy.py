@@ -3,12 +3,13 @@ import time
 import httpx
 from typing import Dict, Any
 from pydantic import BaseModel
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from jose import jwt as jose_jwt
 from app.auth.base import AuthStrategy, AuthResult
 from app.core.config import settings
 from app.core.security import decode_token
+from app.core.exceptions import AuthException
 
 
 class DesktopLoginRequest(BaseModel):
@@ -37,7 +38,7 @@ class DesktopAuthStrategy(AuthStrategy):
             device_id = body.get("device_id", "")
 
             if not code or not code_verifier:
-                raise HTTPException(400, "Missing code or code_verifier")
+                raise AuthException("MISSING_FIELD", 400)
 
             # Google Token Exchange
             id_token, access_token = await self._exchange_code(code, code_verifier)
@@ -57,10 +58,10 @@ class DesktopAuthStrategy(AuthStrategy):
                 metadata={"device_id": device_id},
             )
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Desktop authentication failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def create_session(self, auth_result: AuthResult) -> dict:
         """
@@ -153,24 +154,26 @@ class DesktopAuthStrategy(AuthStrategy):
         """access_token 검증 → exp 반환"""
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(401, "Missing or invalid Authorization header")
+            raise AuthException("INVALID_TOKEN", 401)
 
         token = auth_header[7:]
 
         try:
             payload = decode_token(token)
             if payload.get("type") != "access" or payload.get("platform") != "desktop":
-                raise HTTPException(401, "Invalid token type")
+                raise AuthException("INVALID_TOKEN", 401)
             return {"valid": True, "expires": payload.get("exp")}
+        except AuthException:
+            raise
         except Exception as e:
-            raise HTTPException(401, f"Token validation failed: {str(e)}")
+            raise AuthException("INVALID_TOKEN", 401)
 
     async def refresh(self, request: Request) -> dict:
         """
         Refresh Token Rotation
 
         1. refresh_token 검증
-        2. Redis에서 일치 여부 확인 (Rotation 탐지)
+        2. Reuse Detection: 같은 토큰이 여러 번 사용되는지 확인
         3. 새 Access + Refresh 발급
         4. Redis 업데이트
         5. 이전 refresh_token 즉시 무효화
@@ -180,26 +183,40 @@ class DesktopAuthStrategy(AuthStrategy):
             body = await request.json()
             refresh_token = body.get("refresh_token")
             if not refresh_token:
-                raise HTTPException(400, "Missing refresh_token")
+                raise AuthException("MISSING_FIELD", 400)
 
             # Refresh token 검증
-            payload = decode_token(refresh_token)
+            try:
+                payload = decode_token(refresh_token)
+            except Exception:
+                raise AuthException("INVALID_REFRESH_TOKEN", 401)
+
             if payload.get("type") != "refresh" or payload.get("platform") != "desktop":
-                raise HTTPException(401, "Invalid refresh token")
+                raise AuthException("INVALID_REFRESH_TOKEN", 401)
 
             user_id = payload.get("sub")
             device_id = payload.get("device_id", "")
 
-            # Redis에서 일치 여부 확인
-            from app.core.cache import cache
+            # 🔴 Step 1: Token Reuse Detection with SecurityLog
+            from app.auth.jwt_manager import jwt_manager
 
-            redis_key = f"desktop:refresh:{user_id}:{device_id}"
-            stored_data = await cache.get(redis_key)
+            is_token_valid = await jwt_manager.detect_and_log_refresh_reuse(
+                user_id=user_id,
+                device_id=device_id,
+                old_refresh_token=refresh_token,
+                settings_refresh_expire_days=settings.DESKTOP_REFRESH_EXPIRE_DAYS,
+            )
 
-            if not stored_data or stored_data.get("refresh_token") != refresh_token:
-                # 토큰 재사용 시도 → 모든 기기 로그아웃 고려
+            if not is_token_valid:
+                # 공격 탐지: 모든 기기 로그아웃
+                from app.core.cache import cache
+
                 await cache.invalidate_pattern(f"desktop:refresh:{user_id}:*")
-                raise HTTPException(401, "Token reuse detected")
+
+                # 사용자에게 추가 알림 가능 (이메일 등)
+                # await send_security_alert_email(user_id, "Suspicious activity detected")
+
+                raise HTTPException(401, "Suspicious activity detected. Re-authenticate required.")
 
             # 새 토큰 쌍 발급
             now = int(time.time())
@@ -249,10 +266,10 @@ class DesktopAuthStrategy(AuthStrategy):
                 "refresh_expires": refresh_expires,
             }
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Token refresh failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def _exchange_code(self, code: str, code_verifier: str) -> tuple:
         """
@@ -281,7 +298,7 @@ class DesktopAuthStrategy(AuthStrategy):
                 return tokens.get("id_token"), tokens.get("access_token")
 
         except Exception as e:
-            raise HTTPException(400, f"Token exchange failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def _verify_id_token(self, id_token: str) -> Dict[str, Any]:
         """
@@ -300,9 +317,11 @@ class DesktopAuthStrategy(AuthStrategy):
 
             # 기본 필드 검증
             if not payload.get("sub") or not payload.get("email"):
-                raise HTTPException(401, "Invalid id_token structure")
+                raise AuthException("AUTHENTICATION_FAILED", 401)
 
             return payload
 
+        except AuthException:
+            raise
         except Exception as e:
-            raise HTTPException(401, f"id_token verification failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)

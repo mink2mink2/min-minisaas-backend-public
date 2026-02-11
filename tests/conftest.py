@@ -33,10 +33,31 @@ def mock_cache(monkeypatch):
         for k in keys_to_delete:
             del cache_data[k]
 
+    async def mock_redis_keys(pattern):
+        """Mock redis.keys() for session_manager.destroy_user_sessions()"""
+        # pattern에서 * 를 제거하고 prefix 매칭
+        prefix = pattern.rstrip("*")
+        return [k for k in cache_data.keys() if k.startswith(prefix)]
+
+    async def mock_incr(key):
+        """Mock cache.incr() for device rate limiting"""
+        if key not in cache_data:
+            cache_data[key] = 0
+        cache_data[key] += 1
+        return cache_data[key]
+
+    # Mock cache methods
     monkeypatch.setattr(cache, "get", mock_get)
     monkeypatch.setattr(cache, "set", mock_set)
     monkeypatch.setattr(cache, "delete", mock_delete)
     monkeypatch.setattr(cache, "invalidate_pattern", mock_invalidate_pattern)
+    # For incr, we'll use a different approach since the object doesn't have incr
+    cache.incr = mock_incr
+
+    # Mock cache.redis.keys()
+    mock_redis = MagicMock()
+    mock_redis.keys = mock_redis_keys
+    monkeypatch.setattr(cache, "redis", mock_redis)
 
     return cache_data
 

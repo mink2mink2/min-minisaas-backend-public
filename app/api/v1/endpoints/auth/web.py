@@ -37,7 +37,8 @@ async def login_web(
         picture=auth_result.picture,
     )
 
-    # 3. 세션 생성 (플랫폼별)
+    # 3. 세션 생성 (플랫폼별) - Request를 metadata에 포함
+    auth_result.metadata["request"] = request
     session_data = await strategy.create_session(auth_result)
 
     # 4. 응답 생성 (플랫폼별)

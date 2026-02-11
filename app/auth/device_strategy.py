@@ -1,13 +1,14 @@
 """IoT Device 플랫폼 인증 전략 - API Key + Device Secret → Long-lived JWT"""
 import time
 from typing import Dict, Any
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from jose import jwt as jose_jwt
 from passlib.context import CryptContext
 from app.auth.base import AuthStrategy, AuthResult
 from app.core.config import settings
 from app.core.security import decode_token
+from app.core.exceptions import AuthException
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -34,18 +35,18 @@ class DeviceAuthStrategy(AuthStrategy):
             device_secret = body.get("device_secret")
 
             if not device_id or not device_secret:
-                raise HTTPException(400, "Missing device_id or device_secret")
+                raise AuthException("MISSING_FIELD", 400)
 
             # DB 세션 얻기 (의존성으로부터)
             # 여기서는 직접 생성해야 하므로, kwargs에서 db를 받거나
             # request.app.state에서 가져오거나, 별도 처리 필요
             # 간단히 하기 위해 에러만 반환
-            raise HTTPException(501, "Device authentication requires DB session context")
+            raise AuthException("AUTHENTICATION_FAILED", 501)
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Device authentication failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def create_session(self, auth_result: AuthResult) -> dict:
         """
@@ -160,12 +161,16 @@ class DeviceAuthStrategy(AuthStrategy):
             body = await request.json()
             refresh_token = body.get("refresh_token")
             if not refresh_token:
-                raise HTTPException(400, "Missing refresh_token")
+                raise AuthException("MISSING_FIELD", 400)
 
             # Refresh token 검증
-            payload = decode_token(refresh_token)
+            try:
+                payload = decode_token(refresh_token)
+            except Exception:
+                raise AuthException("INVALID_REFRESH_TOKEN", 401)
+
             if payload.get("type") != "refresh" or payload.get("platform") != "device":
-                raise HTTPException(401, "Invalid refresh token")
+                raise AuthException("INVALID_REFRESH_TOKEN", 401)
 
             user_id = payload.get("sub")
             device_id = payload.get("device_id", "")
@@ -191,7 +196,7 @@ class DeviceAuthStrategy(AuthStrategy):
                 "access_expires": access_expires,
             }
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Token refresh failed: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)

@@ -2,10 +2,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
-
 from app.core.cache import cache
+from app.core.exceptions import AuthException, auth_exception_handler
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
+
+# Register exception handler for unified auth errors
+app.add_exception_handler(AuthException, auth_exception_handler)
 
 @app.on_event("startup")
 async def startup():
