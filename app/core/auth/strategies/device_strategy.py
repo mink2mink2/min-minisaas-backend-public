@@ -1,11 +1,10 @@
 """IoT Device 플랫폼 인증 전략 - API Key + Device Secret → Long-lived JWT"""
 import time
-from typing import Dict, Any
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from jose import jwt as jose_jwt
 from passlib.context import CryptContext
-from app.auth.base import AuthStrategy, AuthResult
+from app.core.auth.base import AuthStrategy, AuthResult
 from app.core.config import settings
 from app.core.security import decode_token
 from app.core.exceptions import AuthException
@@ -26,7 +25,7 @@ class DeviceAuthStrategy(AuthStrategy):
         try:
             from sqlalchemy.ext.asyncio import AsyncSession
             from sqlalchemy import select
-            from app.models.device import Device
+            from app.domain.auth.models.device import Device
             from app.core.database import get_db
 
             # Request body에서 데이터 추출

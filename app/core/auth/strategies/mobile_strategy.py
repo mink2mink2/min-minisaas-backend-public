@@ -1,11 +1,10 @@
 """Mobile 플랫폼 인증 전략 - Firebase JWT (Stateless)"""
 import time
-from typing import Dict, Any
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
-from app.auth.base import AuthStrategy, AuthResult
-from app.auth.firebase_verifier import firebase_verifier
-from app.auth.jwt_manager import jwt_manager
+from app.core.auth.base import AuthStrategy, AuthResult
+from app.core.auth.firebase_verifier import firebase_verifier
+from app.core.auth.jwt_manager import jwt_manager
 from app.core.exceptions import AuthException
 
 

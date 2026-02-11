@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 from jose import jwt as jose_jwt
-from app.auth.base import AuthStrategy, AuthResult
+from app.core.auth.base import AuthStrategy, AuthResult
 from app.core.config import settings
 from app.core.security import decode_token
 from app.core.exceptions import AuthException
@@ -71,7 +71,6 @@ class DesktopAuthStrategy(AuthStrategy):
         - refresh_token: exp = 30일
         - Redis에 refresh_token 저장 (Rotation 추적)
         """
-        from app.auth.session_manager import session_manager
         from app.core.cache import cache
 
         device_id = auth_result.metadata.get("device_id", "")
@@ -178,6 +177,9 @@ class DesktopAuthStrategy(AuthStrategy):
         4. Redis 업데이트
         5. 이전 refresh_token 즉시 무효화
         """
+        from fastapi import HTTPException
+        from app.core.cache import cache
+
         try:
             # Body에서 refresh_token 추출
             body = await request.json()
@@ -198,7 +200,7 @@ class DesktopAuthStrategy(AuthStrategy):
             device_id = payload.get("device_id", "")
 
             # 🔴 Step 1: Token Reuse Detection with SecurityLog
-            from app.auth.jwt_manager import jwt_manager
+            from app.core.auth.jwt_manager import jwt_manager
 
             is_token_valid = await jwt_manager.detect_and_log_refresh_reuse(
                 user_id=user_id,
@@ -209,14 +211,18 @@ class DesktopAuthStrategy(AuthStrategy):
 
             if not is_token_valid:
                 # 공격 탐지: 모든 기기 로그아웃
-                from app.core.cache import cache
-
                 await cache.invalidate_pattern(f"desktop:refresh:{user_id}:*")
 
                 # 사용자에게 추가 알림 가능 (이메일 등)
                 # await send_security_alert_email(user_id, "Suspicious activity detected")
 
                 raise HTTPException(401, "Suspicious activity detected. Re-authenticate required.")
+
+            # Redis에서 현재 토큰 조회 및 검증
+            redis_key = f"desktop:refresh:{user_id}:{device_id}"
+            stored_data = await cache.get(redis_key)
+            if not stored_data or stored_data.get("refresh_token") != refresh_token:
+                raise AuthException("INVALID_REFRESH_TOKEN", 401)
 
             # 새 토큰 쌍 발급
             now = int(time.time())
@@ -267,6 +273,8 @@ class DesktopAuthStrategy(AuthStrategy):
             }
 
         except AuthException:
+            raise
+        except HTTPException:
             raise
         except Exception as e:
             raise AuthException("AUTHENTICATION_FAILED", 401)

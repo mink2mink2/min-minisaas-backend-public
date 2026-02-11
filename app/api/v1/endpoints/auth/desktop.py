@@ -1,16 +1,28 @@
 """Desktop 플랫폼 인증 엔드포인트"""
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.auth import get_strategy
-from app.services.auth_service import AuthService
+from app.core.auth import get_strategy
+from app.domain.auth.services.auth_service import AuthService
 from app.core.database import get_db
 from app.api.v1.dependencies.api_key import verify_api_key
-from app.schemas.user import UserResponse
+from app.domain.auth.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Desktop"])
 
 
-@router.post("/login/desktop")
+@router.post(
+    "/login/desktop",
+    summary="Desktop 로그인 (OAuth2 PKCE → 자체 JWT)",
+    description="""
+    필수 헤더:
+    - X-API-Key
+
+    요청 바디:
+    - code: Google authorization code
+    - code_verifier: PKCE code verifier
+    - device_id: 선택적 기기 식별자
+    """,
+)
 async def login_desktop(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -51,7 +63,17 @@ async def login_desktop(
     return await strategy.build_response(response_data, session_data)
 
 
-@router.post("/refresh/desktop")
+@router.post(
+    "/refresh/desktop",
+    summary="Desktop 토큰 갱신 (Refresh Rotation)",
+    description="""
+    필수 헤더:
+    - X-API-Key
+
+    요청 바디:
+    - refresh_token: 현재 리프레시 토큰
+    """,
+)
 async def refresh_desktop(
     request: Request,
     api_key: str = Depends(verify_api_key),

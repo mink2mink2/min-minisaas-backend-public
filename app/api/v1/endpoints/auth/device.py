@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
-from app.models.device import Device
+from app.domain.auth.models.device import Device
 from app.core.database import get_db
 from app.api.v1.dependencies.api_key import verify_api_key
 from app.core.cache import cache
@@ -19,7 +19,18 @@ DEVICE_FAILED_LOGIN_LIMIT = 5
 DEVICE_LOCKOUT_MINUTES = 15
 
 
-@router.post("/login/device")
+@router.post(
+    "/login/device",
+    summary="IoT 디바이스 로그인 (API Key + Device Secret)",
+    description="""
+    필수 헤더:
+    - X-API-Key
+
+    요청 바디:
+    - device_id: 디바이스 ID
+    - device_secret: 디바이스 시크릿
+    """,
+)
 async def login_device(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -32,8 +43,7 @@ async def login_device(
         - device_id: 디바이스 ID
         - device_secret: 디바이스 시크릿
     """
-    from app.auth import get_strategy
-    from app.auth.base import AuthResult
+    from app.core.auth import get_strategy, AuthResult
 
     try:
         body = await request.json()
@@ -117,7 +127,17 @@ async def login_device(
         raise AuthException("SERVER_ERROR", 500)
 
 
-@router.post("/refresh/device")
+@router.post(
+    "/refresh/device",
+    summary="IoT 디바이스 토큰 갱신",
+    description="""
+    필수 헤더:
+    - X-API-Key
+
+    요청 바디:
+    - refresh_token: 현재 refresh token (Rotation 미적용)
+    """,
+)
 async def refresh_device(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -128,14 +148,26 @@ async def refresh_device(
     Request Body:
         - refresh_token: 현재 refresh token
     """
-    from app.auth import get_strategy
+    from app.core.auth import get_strategy
 
     strategy = get_strategy("device")
     result = await strategy.refresh(request)
     return {"success": True, **result}
 
 
-@router.post("/device/{device_id}/rotate-secret")
+@router.post(
+    "/device/{device_id}/rotate-secret",
+    summary="IoT 디바이스 시크릿 로테이션",
+    description="""
+    기존 시크릿으로 검증 후 새로운 시크릿을 발급합니다. 발급된 시크릿은 한 번만 응답에 표시됩니다.
+
+    필수 헤더:
+    - X-API-Key
+
+    요청 바디:
+    - device_secret: 현재 디바이스 시크릿 (검증용)
+    """,
+)
 async def rotate_device_secret(
     device_id: str,
     request: Request,
@@ -189,7 +221,8 @@ async def rotate_device_secret(
         await db.commit()
 
         # 🔴 Step 4: SecurityLog 기록
-        from app.models.security_log import SecurityLog
+        from app.domain.auth.models.security_log import SecurityLog
+        from app.core.events import event_bus, SecurityAlertEvent
 
         log = SecurityLog(
             user_id=str(device.owner_id),
@@ -202,6 +235,21 @@ async def rotate_device_secret(
         )
         db.add(log)
         await db.commit()
+
+        # 보안 경고 이벤트 발행 (이벤트 기반 알림)
+        try:
+            await event_bus.emit(SecurityAlertEvent(
+                user_id=str(device.owner_id),
+                event_type="DEVICE_SECRET_ROTATED",
+                severity="MEDIUM",
+                details={
+                    "device_id": device_id,
+                    "device_name": device.name,
+                },
+                device_id=device_id
+            ))
+        except Exception:
+            pass
 
         return {
             "success": True,

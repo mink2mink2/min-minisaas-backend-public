@@ -1,7 +1,6 @@
 """Auth 엔드포인트 테스트"""
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch, MagicMock
 from app.main import app
 
 
@@ -159,7 +158,7 @@ class TestDesktopTokenReuseDetection:
     @pytest.mark.asyncio
     async def test_jwt_manager_first_use(self, mock_cache):
         """Step 1: 첫 사용 - 정상적으로 히스토리에 기록됨"""
-        from app.auth.jwt_manager import jwt_manager
+        from app.core.auth import jwt_manager
 
         user_id = "user-123"
         device_id = "device-456"
@@ -183,7 +182,7 @@ class TestDesktopTokenReuseDetection:
     @pytest.mark.asyncio
     async def test_jwt_manager_token_reuse_detected(self, mock_cache):
         """Step 2: 토큰 재사용 감지 - 같은 토큰을 두 번 사용"""
-        from app.auth.jwt_manager import jwt_manager
+        from app.core.auth import jwt_manager
 
         user_id = "user-123"
         device_id = "device-456"
@@ -215,7 +214,7 @@ class TestDesktopTokenReuseDetection:
     @pytest.mark.asyncio
     async def test_jwt_manager_different_tokens_allowed(self, mock_cache):
         """Step 3: 다른 토큰은 계속 사용 가능"""
-        from app.auth.jwt_manager import jwt_manager
+        from app.core.auth import jwt_manager
 
         user_id = "user-123"
         device_id = "device-456"
@@ -254,7 +253,7 @@ class TestDesktopTokenReuseDetection:
     @pytest.mark.asyncio
     async def test_jwt_manager_different_devices_isolated(self, mock_cache):
         """Step 4: 다른 기기는 히스토리가 독립적"""
-        from app.auth.jwt_manager import jwt_manager
+        from app.core.auth import jwt_manager
 
         user_id = "user-123"
         settings_expire_days = 30
@@ -287,7 +286,7 @@ class TestDesktopTokenReuseDetection:
     @pytest.mark.asyncio
     async def test_jwt_manager_generation_count_increments(self, mock_cache):
         """Step 5: Generation count가 정상적으로 증가"""
-        from app.auth.jwt_manager import jwt_manager
+        from app.core.auth import jwt_manager
 
         user_id = "user-999"
         device_id = "device-999"
@@ -311,7 +310,7 @@ class TestWebSessionFixationPrevention:
     @pytest.mark.asyncio
     async def test_session_manager_destroy(self, mock_cache):
         """Step 1: SessionManager destroy() 메서드 테스트"""
-        from app.auth.session_manager import session_manager
+        from app.core.auth.session_manager import session_manager
 
         # 세션 생성
         session_id = await session_manager.create("user-123")
@@ -325,9 +324,8 @@ class TestWebSessionFixationPrevention:
     @pytest.mark.asyncio
     async def test_old_session_not_reusable_after_login(self, mock_cache):
         """Step 2: Old session ID는 로그인 후 사용 불가"""
-        from app.auth.session_manager import session_manager
-        from app.auth.web_strategy import WebAuthStrategy
-        from app.auth.base import AuthResult
+        from app.core.auth import WebAuthStrategy
+        from app.core.auth import AuthResult
 
         # 공격자가 미리 설정한 session ID
         attacker_session_id = "attacker-preset-id"
@@ -379,9 +377,8 @@ class TestWebSessionFixationPrevention:
     @pytest.mark.asyncio
     async def test_session_fixation_multiple_attempts(self, mock_cache):
         """Step 3: 여러 공격자 session이 모두 파괴됨"""
-        from app.auth.session_manager import session_manager
-        from app.auth.web_strategy import WebAuthStrategy
-        from app.auth.base import AuthResult
+        from app.core.auth import WebAuthStrategy
+        from app.core.auth import AuthResult
         from unittest.mock import MagicMock
 
         # Pre-login: 여러 개의 old session (공격자들)
@@ -424,8 +421,8 @@ class TestWebSessionFixationPrevention:
     @pytest.mark.asyncio
     async def test_session_fixation_with_no_old_session(self, mock_cache):
         """Step 4: Old session이 없는 경우 (정상 로그인)"""
-        from app.auth.web_strategy import WebAuthStrategy
-        from app.auth.base import AuthResult
+        from app.core.auth import WebAuthStrategy
+        from app.core.auth import AuthResult
         from unittest.mock import MagicMock
 
         # Normal login: 쿠키에 old session이 없음
@@ -454,8 +451,8 @@ class TestWebSessionFixationPrevention:
     @pytest.mark.asyncio
     async def test_session_fixation_with_no_request(self, mock_cache):
         """Step 5: Request가 metadata에 없는 경우 (graceful handling)"""
-        from app.auth.web_strategy import WebAuthStrategy
-        from app.auth.base import AuthResult
+        from app.core.auth import WebAuthStrategy
+        from app.core.auth import AuthResult
 
         # Edge case: request 없이 호출 (실제로는 발생하지 않아야 함)
         auth_result = AuthResult(

@@ -1,20 +1,31 @@
 """공통 인증 엔드포인트 (플랫폼 무관)"""
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.auth.base import AuthResult
-from app.auth.csrf_manager import CSRFTokenManager
+from app.core.auth import AuthResult, CSRFTokenManager, get_strategy
 from app.api.v1.dependencies.api_key import verify_api_key
-from app.api.v1.dependencies.auth import verify_any_platform, verify_csrf_token
+from app.api.v1.dependencies.auth import verify_any_platform
 from app.core.database import get_db
-from app.services.auth_service import AuthService
-from app.auth import get_strategy
-from app.schemas.user import UserResponse
-from app.schemas.csrf import CSRFTokenResponse
+from app.domain.auth.services.auth_service import AuthService
+from app.domain.auth.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Common"])
 
 
-@router.post("/heartbeat")
+@router.post(
+    "/heartbeat",
+    summary="세션/토큰 유효성 확인",
+    description="""
+    - Web: 쿠키 세션 슬라이딩 윈도우 갱신
+    - Mobile: Firebase JWT 검증만 수행
+    - Desktop/Device: 자체 JWT 검증만 수행
+
+    필수 헤더:
+    - X-API-Key
+    - X-Platform: web | mobile | desktop | device
+    - Authorization: Bearer <token> (web 제외)
+    - Cookie: session=<id> (web 전용)
+    """,
+)
 async def heartbeat(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -32,7 +43,18 @@ async def heartbeat(
     return {"success": True, **result}
 
 
-@router.post("/refresh")
+@router.post(
+    "/refresh",
+    summary="토큰/세션 갱신",
+    description="""
+    - Web: heartbeat와 동일 (세션 기반)
+    - Desktop: Refresh Token Rotation 처리
+    - IoT: Refresh Token 갱신 (Rotation 없음)
+
+    필수 헤더:
+    - X-API-Key, X-Platform
+    """,
+)
 async def refresh(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -50,7 +72,21 @@ async def refresh(
     return {"success": True, **result}
 
 
-@router.post("/logout")
+@router.post(
+    "/logout",
+    summary="로그아웃 (CSRF 토큰 필수)",
+    description="""
+    - Web: 서버 세션 파괴 + JWT 무효화
+    - Mobile: 클라이언트 토큰 삭제를 권장
+    - Desktop: Refresh Token 무효화
+    - IoT: 디바이스 세션 삭제
+
+    필수 헤더:
+    - X-API-Key, X-Platform, X-CSRF-Token
+    - Authorization: Bearer <token> (web 제외)
+    - Cookie: session=<id> (web 전용)
+    """,
+)
 async def logout(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -88,7 +124,18 @@ async def logout(
     return {"success": True, "message": "로그아웃 완료"}
 
 
-@router.get("/me")
+@router.get(
+    "/me",
+    summary="현재 사용자 정보 조회 + CSRF 토큰 발급",
+    description="""
+    - 모든 플랫폼에서 사용 가능
+    - 민감 작업 전 호출하여 `csrf_token`을 획득하세요 (logout, account deletion)
+
+    필수 헤더:
+    - X-API-Key, X-Platform
+    - Authorization 또는 Cookie (플랫폼별)
+    """,
+)
 async def get_current_user(
     request: Request,
     api_key: str = Depends(verify_api_key),
@@ -122,7 +169,17 @@ async def get_current_user(
     }
 
 
-@router.delete("/account")
+@router.delete(
+    "/account",
+    summary="계정 삭제 (소프트 삭제) - CSRF 필요",
+    description="""
+    - 모든 세션/토큰 무효화 후 계정 비활성화
+
+    필수 헤더:
+    - X-API-Key, X-Platform, X-CSRF-Token
+    - Authorization 또는 Cookie (플랫폼별)
+    """,
+)
 async def delete_account(
     request: Request,
     api_key: str = Depends(verify_api_key),

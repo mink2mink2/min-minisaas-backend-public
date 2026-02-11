@@ -217,12 +217,11 @@ class AuthStrategy(ABC):
 
 ```python
 # app/auth/__init__.py
-from app.auth.base import AuthStrategy
-from app.auth.web_strategy import WebAuthStrategy
-from app.auth.mobile_strategy import MobileAuthStrategy
-from app.auth.desktop_strategy import DesktopAuthStrategy
-from app.auth.device_strategy import DeviceAuthStrategy
-
+from app.auth import AuthStrategy
+from app.auth import WebAuthStrategy
+from app.auth import MobileAuthStrategy
+from app.auth import DesktopAuthStrategy
+from app.auth import DeviceAuthStrategy
 
 _strategies: dict[str, AuthStrategy] = {
     "web": WebAuthStrategy(),
@@ -550,15 +549,16 @@ class AuthService:
 ```python
 # app/api/v1/endpoints/auth/web.py
 from app.auth import get_strategy
-from app.services.auth_service import AuthService
+from app.domain.auth.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth - Web"])
 
+
 @router.post("/login/web")
 async def login_web(
-    request: Request,
-    api_key: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
+        request: Request,
+        api_key: str = Depends(verify_api_key),
+        db: AsyncSession = Depends(get_db),
 ):
     strategy = get_strategy("web")
 
@@ -1031,3 +1031,58 @@ DEVICE_REFRESH_EXPIRE_DAYS=90       # IoT refresh token
 | `response_helpers.py` | 쿠키 응답 생성 | `WebAuthStrategy.build_response()` 내부로 흡수 | 하드코딩 제거 |
 | `auth_router.py` login() | 비즈니스 로직 | `AuthService.get_or_create_user()` | 플랫폼 분기 제거, 순수 비즈니스 로직만 |
 | `dependencies/auth.py` | 인증 미들웨어 | `app/api/v1/dependencies/auth.py` | 전략별 분리 |
+
+---
+
+## 17. 2026-02-11 리팩토링 제안: Core/Domain 분리 (by Junie)
+
+인증 시스템의 유지보수성과 확장성을 극대화하기 위해, 기술적 구현(Core)과 비즈니스 로직(Domain)을 분리하는 구조를 도입합니다.
+
+### 17.1 계층별 역할 분담
+
+*   **`app/core/auth/` (기술 중심 Core)**
+    *   **역할:** 인증의 "어떻게(How)"를 담당합니다.
+    *   **내용:** JWT 생성/검증, Redis 세션 관리, Firebase SDK 연동, 암호화 알고리즘 등 순수 기술 라이브러리 역할을 합니다.
+    *   **특징:** 도메인 지식(User 모델, 포인트 등)을 가지지 않으며, 입력값에 따른 기술적 결과물(토큰, 세션ID)만 반환합니다.
+
+*   **`app/domain/auth/` (비즈니스 중심 Domain)**
+    *   **역할:** 인증의 "무엇을(What)"과 "정책"을 담당합니다.
+    *   **내용:** `AuthService`가 여기에 해당합니다. Core Auth를 호출하여 자격 증명을 확인한 후, "신규 가입 시 10포인트 지급", "로그인 시 마지막 접속일 갱신"과 같은 **도메인 규칙**을 실행합니다.
+    *   **특징:** DB 모델(User)에 접근하고 비즈니스 이벤트를 발행합니다.
+
+*   **`app/api/v1/endpoints/auth/` (인터페이스 레이어 Login)**
+    *   **역할:** 클라이언트와의 접점입니다.
+    *   **내용:** HTTP 요청을 받아 `Domain Auth` 서비스를 호출하고 응답을 생성합니다.
+
+### 17.2 제안하는 모듈화 구조
+
+```text
+app/
+├── core/                       # 공통 기술 기반
+│   ├── auth/                   # [Core Auth] 기술 레이어
+│   │   ├── jwt_manager.py      # 토큰 메커니즘
+│   │   ├── session_manager.py  # 세션 메커니즘
+│   │   └── strategies/         # 플랫폼별 인증 기술 (Web, Mobile 등)
+│   └── notifications/          # 알림 인프라
+│       ├── base.py             # NotificationProvider 추상 클래스
+│       └── slack.py            # SlackProvider 구현체
+│
+├── domain/                     # 비즈니스 도메인
+│   ├── auth/                   # [Domain Auth] 비즈니스 레이어
+│   │   ├── services/           # AuthService (Core Auth를 조합하여 비즈니스 로직 수행)
+│   │   ├── models/             # User, SecurityLog, Device 등
+│   │   └── schemas/            # DTO (UserResponse 등)
+│   └── payments/               # 다른 도메인 예시
+│
+└── api/v1/                     # API 엔드포인트
+    └── auth/                   # [Login]
+        ├── web.py              # Domain Auth 서비스를 호출
+        ├── mobile.py
+        ├── desktop.py
+        └── device.py
+```
+
+### 17.3 장점
+*   **재사용성:** 기술적 인증 로직만 따로 떼어내어 다른 서비스에서 활용 가능.
+*   **유연성:** 인증 방식(Firebase -> 자체 DB 등) 변경 시 Core만 수정, 비즈니스 로직(Domain) 보호.
+*   **응집도:** 각 레이어가 명확한 책임 범위를 가짐.

@@ -65,6 +65,22 @@ class UserLoggedOutEvent(Event):
             }
         )
 
+
+@dataclass
+class SecurityAlertEvent(Event):
+    """보안 경고 이벤트"""
+    def __init__(self, user_id: str, event_type: str, severity: str, details: dict = None, device_id: str = None):
+        super().__init__(
+            event_type="security.alert",
+            payload={
+                "user_id": user_id,
+                "event_type": event_type,
+                "severity": severity,
+                "details": details or {},
+                "device_id": device_id
+            }
+        )
+
 # ============================================================================
 # Event Bus
 # ============================================================================

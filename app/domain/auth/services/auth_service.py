@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.user import User
+from app.domain.auth.models.user import User
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.core.cache import cache
 

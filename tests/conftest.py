@@ -1,9 +1,8 @@
 """테스트 설정"""
 import pytest
 import asyncio
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from app.core.cache import cache
-from app.core.config import settings
 
 
 @pytest.fixture(scope="session")
@@ -68,7 +67,7 @@ def mock_dependencies(monkeypatch):
     from app.main import app
     from app.api.v1.dependencies.api_key import verify_api_key
     from app.core.database import get_db
-    from app.services.auth_service import AuthService
+    from app.domain.auth.services.auth_service import AuthService
 
     # Mock API Key - always valid
     async def mock_verify_api_key(x_api_key: str = None):

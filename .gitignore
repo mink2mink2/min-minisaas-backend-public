@@ -136,6 +136,9 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+# Temp files
+.output.txt
+
 # Secrets & credentials
 .env.local
 secrets/

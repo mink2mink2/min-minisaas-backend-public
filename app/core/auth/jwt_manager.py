@@ -1,7 +1,5 @@
 """JWT 재사용 방지 및 무효화 관리"""
-from typing import Optional
 import hashlib
-import json
 from app.core.cache import cache
 
 
@@ -141,7 +139,7 @@ class JWTManager:
         details: dict = None,
     ) -> None:
         """
-        보안 이벤트를 SecurityLog 데이터베이스에 기록
+        보안 이벤트를 SecurityLog 데이터베이스에 기록하고 이벤트를 발행
 
         Args:
             user_id: 사용자 ID
@@ -150,7 +148,8 @@ class JWTManager:
             details: 추가 정보 (선택)
         """
         from app.core.database import AsyncSessionLocal
-        from app.models.security_log import SecurityLog
+        from app.domain.auth.models.security_log import SecurityLog
+        from app.core.events import event_bus, SecurityAlertEvent
 
         try:
             async with AsyncSessionLocal() as db:
@@ -162,9 +161,19 @@ class JWTManager:
                 )
                 db.add(log)
                 await db.commit()
+
+            # 보안 경고 이벤트 발행 (이벤트 기반 알림)
+            severity = "HIGH" if event_type in {"TOKEN_REUSE_DETECTED"} else "LOW"
+            await event_bus.emit(SecurityAlertEvent(
+                user_id=user_id,
+                event_type=event_type,
+                severity=severity,
+                details=details or {},
+                device_id=device_id
+            ))
         except Exception as e:
-            # 로깅 실패해도 인증 흐름을 중단하지 않음
-            print(f"Failed to log security event: {str(e)}")
+            # 로깅이나 이벤트 발행 실패해도 인증 흐름을 중단하지 않음
+            print(f"Failed to log security event or emit event: {str(e)}")
 
 
 jwt_manager = JWTManager()

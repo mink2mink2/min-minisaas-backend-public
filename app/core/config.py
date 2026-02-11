@@ -1,5 +1,6 @@
 """설정 모듈"""
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # Environment
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+
+    # Slack Monitoring
+    SLACK_WEBHOOK_URL: Optional[str] = None
+    SECURITY_ALERT_THRESHOLD: str = "LOW"  # LOW, MEDIUM, HIGH
 
     class Config:
         env_file = ".env"

@@ -1,8 +1,8 @@
 # Security Implementation TODO - Min-Minisaas Backend
 
-**Status:** 71% Complete (P1 + P2 + P3[Task 5] Finished)
+**Status:** 85% Complete (P1 + P2 + P3[Task 5] + P4 Finished)
 **Last Updated:** Feb 11, 2026
-**Overall Progress:** 5/7 Tasks ✅
+**Overall Progress:** 6/7 Tasks ✅
 
 ---
 
@@ -203,6 +203,26 @@ This document outlines 7 security enhancement tasks identified in the auth-archi
 
 #### Estimated Effort
 ⏱️ **20+ hours** (requires hardware testing)
+
+---
+
+## 🏗️ Priority 4 - Architecture Refactoring (Completed)
+
+### Task 8: Core/Domain Layer Separation
+
+**Status:** ✅ COMPLETED
+**Risk Level:** 🟡 MEDIUM (Refactoring risk)
+**File Owner:** All Auth related files
+
+#### Implementation Summary
+- ✅ Moved `app/auth/` to `app/core/auth/` (Core Auth)
+- ✅ Created `app/domain/auth/` structure (Domain Auth)
+- ✅ Moved `app/services/auth_service.py` to `app/domain/auth/services/`
+- ✅ Moved `app/models/user.py`, `app/models/security_log.py`, `app/models/device.py` to `app/domain/auth/models/`
+- ✅ Moved `app/schemas/user.py`, `app/schemas/csrf.py` to `app/domain/auth/schemas/`
+- ✅ Refactor `app/utils/slack.py` to `app/core/notifications/slack.py`
+- ✅ Created `NotificationService` in `app/core/notifications/`
+- ✅ Updated all imports and verified with pytest (78/78 PASS)
 
 ---
 

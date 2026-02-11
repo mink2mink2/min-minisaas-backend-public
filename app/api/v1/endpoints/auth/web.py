@@ -1,16 +1,27 @@
 """Web 플랫폼 인증 엔드포인트"""
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.auth import get_strategy
-from app.services.auth_service import AuthService
+from app.core.auth import get_strategy
+from app.domain.auth.services.auth_service import AuthService
 from app.core.database import get_db
 from app.api.v1.dependencies.api_key import verify_api_key
-from app.schemas.user import UserResponse
+from app.domain.auth.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Web"])
 
 
-@router.post("/login/web")
+@router.post(
+    "/login/web",
+    summary="Web 로그인 (Firebase JWT → 서버 세션)",
+    description="""
+    필수 헤더:
+    - X-API-Key
+    - Authorization: Bearer <firebase_jwt>
+
+    동작:
+    - Firebase JWT 검증 후 서버사이드 세션 생성 및 HttpOnly 쿠키 설정
+    """,
+)
 async def login_web(
     request: Request,
     api_key: str = Depends(verify_api_key),

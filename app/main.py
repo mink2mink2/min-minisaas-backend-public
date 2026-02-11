@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 from app.core.cache import cache
 from app.core.exceptions import AuthException, auth_exception_handler
+from app.core.events import event_bus
+from app.core.notifications.notification_service import notification_service
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
@@ -13,6 +15,10 @@ app.add_exception_handler(AuthException, auth_exception_handler)
 @app.on_event("startup")
 async def startup():
     await cache.init()
+    await event_bus.connect()
+    
+    # 이벤트 핸들러 등록
+    event_bus.subscribe("security.alert", notification_service.handle_security_alert)
 
 # CORS
 app.add_middleware(

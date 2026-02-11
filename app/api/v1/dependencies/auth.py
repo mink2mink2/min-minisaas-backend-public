@@ -1,11 +1,9 @@
 """인증 의존성"""
 from typing import Optional
 from fastapi import Request, Header, HTTPException
-from app.auth.base import AuthResult
-from app.auth.firebase_verifier import firebase_verifier
-from app.auth.session_manager import session_manager
-from app.auth.jwt_manager import jwt_manager
-from app.auth.csrf_manager import CSRFTokenManager
+from app.core.auth import AuthResult, CSRFTokenManager
+from app.core.auth.firebase_verifier import firebase_verifier
+from app.core.auth.session_manager import session_manager
 from app.core.security import decode_token
 
 

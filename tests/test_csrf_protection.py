@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, patch, MagicMock
 from app.main import app
-from app.auth.csrf_manager import CSRFTokenManager
+from app.core.auth import CSRFTokenManager
 from app.core.cache import cache
 
 
@@ -136,7 +136,7 @@ class TestCSRFEndpointIntegration:
         """/auth/me: CSRF 토큰 응답에 포함"""
         with patch("app.api.v1.dependencies.auth.verify_any_platform", new_callable=AsyncMock) as mock_auth, \
              patch("app.api.v1.dependencies.api_key.verify_api_key", new_callable=AsyncMock) as mock_api, \
-             patch("app.services.auth_service.AuthService.get_user_by_id", new_callable=AsyncMock) as mock_user, \
+             patch("app.domain.auth.services.auth_service.AuthService.get_user_by_id", new_callable=AsyncMock) as mock_user, \
              patch.object(CSRFTokenManager, "create_and_store", new_callable=AsyncMock) as mock_csrf:
 
             # Mock 설정
@@ -220,7 +220,7 @@ class TestCSRFEndpointIntegration:
              patch("app.api.v1.dependencies.api_key.verify_api_key", new_callable=AsyncMock) as mock_api, \
              patch.object(CSRFTokenManager, "consume", new_callable=AsyncMock) as mock_consume, \
              patch.object(CSRFTokenManager, "revoke_all", new_callable=AsyncMock) as mock_revoke, \
-             patch("app.auth.get_strategy") as mock_strategy:
+             patch("app.core.auth.get_strategy") as mock_strategy:
 
             # Mock 설정
             mock_api.return_value = "valid_key"
@@ -294,8 +294,8 @@ class TestCSRFEndpointIntegration:
              patch("app.api.v1.dependencies.api_key.verify_api_key", new_callable=AsyncMock) as mock_api, \
              patch.object(CSRFTokenManager, "consume", new_callable=AsyncMock) as mock_consume, \
              patch.object(CSRFTokenManager, "revoke_all", new_callable=AsyncMock) as mock_revoke, \
-             patch("app.services.auth_service.AuthService.deactivate_user", new_callable=AsyncMock) as mock_deactivate, \
-             patch("app.auth.get_strategy") as mock_strategy:
+             patch("app.domain.auth.services.auth_service.AuthService.deactivate_user", new_callable=AsyncMock) as mock_deactivate, \
+             patch("app.core.auth.get_strategy") as mock_strategy:
 
             # Mock 설정
             mock_api.return_value = "valid_key"
@@ -332,11 +332,11 @@ class TestCSRFTokenFlowIntegration:
         """완전한 흐름: /me → /logout (CSRF 토큰 사용)"""
         with patch("app.api.v1.dependencies.auth.verify_any_platform", new_callable=AsyncMock) as mock_auth, \
              patch("app.api.v1.dependencies.api_key.verify_api_key", new_callable=AsyncMock) as mock_api, \
-             patch("app.services.auth_service.AuthService.get_user_by_id", new_callable=AsyncMock) as mock_user, \
+             patch("app.domain.auth.services.auth_service.AuthService.get_user_by_id", new_callable=AsyncMock) as mock_user, \
              patch.object(CSRFTokenManager, "create_and_store", new_callable=AsyncMock) as mock_create, \
              patch.object(CSRFTokenManager, "consume", new_callable=AsyncMock) as mock_consume, \
              patch.object(CSRFTokenManager, "revoke_all", new_callable=AsyncMock) as mock_revoke, \
-             patch("app.auth.get_strategy") as mock_strategy:
+             patch("app.core.auth.get_strategy") as mock_strategy:
 
             # Step 1: /me 호출 - CSRF 토큰 획득
             mock_api.return_value = "valid_key"

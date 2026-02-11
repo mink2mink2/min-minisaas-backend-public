@@ -1,10 +1,7 @@
 """Auth 인프라 기본 테스트"""
 import pytest
-from app.auth import get_strategy, WebAuthStrategy, MobileAuthStrategy, DesktopAuthStrategy, DeviceAuthStrategy
-from app.auth.firebase_verifier import firebase_verifier
-from app.auth.jwt_manager import jwt_manager
-from app.auth.session_manager import session_manager
-from app.auth.base import AuthResult
+from app.core.auth import get_strategy, WebAuthStrategy, MobileAuthStrategy, DesktopAuthStrategy, DeviceAuthStrategy, jwt_manager, session_manager, AuthResult
+from app.core.auth.firebase_verifier import firebase_verifier
 
 
 class TestAuthStrategyFactory:
