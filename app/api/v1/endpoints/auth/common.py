@@ -2,12 +2,14 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.base import AuthResult
+from app.auth.csrf_manager import CSRFTokenManager
 from app.api.v1.dependencies.api_key import verify_api_key
-from app.api.v1.dependencies.auth import verify_any_platform
+from app.api.v1.dependencies.auth import verify_any_platform, verify_csrf_token
 from app.core.database import get_db
 from app.services.auth_service import AuthService
 from app.auth import get_strategy
 from app.schemas.user import UserResponse
+from app.schemas.csrf import CSRFTokenResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Common"])
 
@@ -55,15 +57,34 @@ async def logout(
     auth: AuthResult = Depends(verify_any_platform),
 ) -> dict:
     """
-    로그아웃
+    로그아웃 (CSRF 토큰 필수)
 
     - Web: 서버 세션 파괴 + JWT 무효화
     - Mobile: JWT 무효화 (클라이언트가 토큰 삭제)
     - Desktop: Refresh Token 무효화
     - IoT: 디바이스 세션 삭제
+
+    Headers:
+        X-CSRF-Token: CSRF 토큰 (GET /auth/me에서 획득)
     """
+    # CSRF 토큰 검증
+    x_csrf_token = request.headers.get("X-CSRF-Token")
+    if not x_csrf_token:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Missing X-CSRF-Token header")
+
+    is_valid = await CSRFTokenManager.consume(auth.user_id, auth.platform, x_csrf_token)
+    if not is_valid:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Invalid or expired CSRF token")
+
+    # 로그아웃 처리
     strategy = get_strategy(auth.platform)
     await strategy.logout(request, auth.user_id)
+
+    # 모든 CSRF 토큰 무효화
+    await CSRFTokenManager.revoke_all(auth.user_id)
+
     return {"success": True, "message": "로그아웃 완료"}
 
 
@@ -78,6 +99,7 @@ async def get_current_user(
     현재 사용자 정보 조회
 
     모든 플랫폼에서 사용 가능
+    CSRF 토큰 생성 후 응답에 포함 (logout, account deletion 전에 호출 필수)
     """
     service = AuthService(db)
     user = await service.get_user_by_id(auth.user_id)
@@ -87,9 +109,16 @@ async def get_current_user(
 
         raise HTTPException(404, "User not found")
 
+    # CSRF 토큰 생성 (민감한 작업용)
+    csrf_token = await CSRFTokenManager.create_and_store(
+        user_id=auth.user_id,
+        platform=auth.platform
+    )
+
     return {
         "success": True,
         "user": UserResponse.model_validate(user).model_dump(),
+        "csrf_token": csrf_token,
     }
 
 
@@ -101,18 +130,34 @@ async def delete_account(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
-    계정 삭제 (소프트 삭제)
+    계정 삭제 (소프트 삭제) - CSRF 토큰 필수
 
     - 모든 세션/토큰 무효화
     - 사용자 계정 비활성화
+
+    Headers:
+        X-CSRF-Token: CSRF 토큰 (GET /auth/me에서 획득)
     """
-    service = AuthService(db)
+    # CSRF 토큰 검증
+    x_csrf_token = request.headers.get("X-CSRF-Token")
+    if not x_csrf_token:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Missing X-CSRF-Token header")
+
+    is_valid = await CSRFTokenManager.consume(auth.user_id, auth.platform, x_csrf_token)
+    if not is_valid:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Invalid or expired CSRF token")
 
     # 1. 사용자 비활성화
+    service = AuthService(db)
     await service.deactivate_user(auth.user_id)
 
     # 2. 로그아웃 처리 (모든 세션/토큰 무효화)
     strategy = get_strategy(auth.platform)
     await strategy.logout(request, auth.user_id)
+
+    # 3. 모든 CSRF 토큰 무효화
+    await CSRFTokenManager.revoke_all(auth.user_id)
 
     return {"success": True, "message": "계정 삭제 완료"}

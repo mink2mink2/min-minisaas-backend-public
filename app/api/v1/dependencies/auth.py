@@ -5,6 +5,7 @@ from app.auth.base import AuthResult
 from app.auth.firebase_verifier import firebase_verifier
 from app.auth.session_manager import session_manager
 from app.auth.jwt_manager import jwt_manager
+from app.auth.csrf_manager import CSRFTokenManager
 from app.core.security import decode_token
 
 
@@ -130,3 +131,34 @@ async def verify_any_platform(
         return await verify_self_jwt(authorization=authorization or "")
     else:
         raise HTTPException(400, f"Unknown platform: {x_platform}")
+
+
+async def verify_csrf_token(
+    user_id: str,
+    platform: str,
+    x_csrf_token: str = Header(None, alias="X-CSRF-Token"),
+) -> str:
+    """
+    CSRF 토큰 검증 - 민감한 작업 (logout, delete account)에서 사용
+
+    Args:
+        user_id: 사용자 ID
+        platform: 플랫폼
+        x_csrf_token: X-CSRF-Token 헤더
+
+    Returns:
+        유효한 CSRF 토큰
+
+    Raises:
+        HTTPException: CSRF 토큰 검증 실패
+    """
+    if not x_csrf_token:
+        raise HTTPException(403, "Missing X-CSRF-Token header")
+
+    # 토큰 검증 및 소비 (1회용)
+    is_valid = await CSRFTokenManager.consume(user_id, platform, x_csrf_token)
+
+    if not is_valid:
+        raise HTTPException(403, "Invalid or expired CSRF token")
+
+    return x_csrf_token
