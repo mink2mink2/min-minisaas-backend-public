@@ -3,7 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 
+from app.core.cache import cache
+
 app = FastAPI(title="min-minisaas", version="0.1.0")
+
+@app.on_event("startup")
+async def startup():
+    await cache.init()
 
 # CORS
 app.add_middleware(

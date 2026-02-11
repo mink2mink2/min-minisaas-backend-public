@@ -3,6 +3,8 @@ import redis.asyncio as redis
 import json
 from typing import Any, Optional
 
+from app.core.config import settings
+
 class RedisCache:
     def __init__(self, redis_url: str):
         self.redis = None
@@ -38,7 +40,3 @@ class RedisCache:
 
 # 전역 캐시 인스턴스
 cache = RedisCache(settings.REDIS_URL)
-
-@app.on_event("startup")
-async def startup():
-    await cache.init()
