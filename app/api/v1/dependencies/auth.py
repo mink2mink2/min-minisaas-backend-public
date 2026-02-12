@@ -1,10 +1,12 @@
 """인증 의존성"""
 from typing import Optional
-from fastapi import Request, Header, HTTPException
+from fastapi import Request, Header, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AuthResult, CSRFTokenManager
 from app.core.auth.firebase_verifier import firebase_verifier
 from app.core.auth.session_manager import session_manager
 from app.core.security import decode_token
+from app.core.database import get_db
 
 
 def _extract_bearer_token(authorization: str) -> str:
@@ -43,12 +45,16 @@ async def verify_web_session(request: Request) -> AuthResult:
     )
 
 
-async def verify_firebase_jwt(authorization: str = Header(...)) -> AuthResult:
+async def verify_firebase_jwt(
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> AuthResult:
     """
-    Mobile 전용 - Firebase JWT 검증
+    Mobile 전용 - Firebase JWT 검증 (firebase_uid → DB user UUID 변환)
 
     Args:
         authorization: Authorization 헤더
+        db: AsyncSession
 
     Returns:
         AuthResult
@@ -60,9 +66,25 @@ async def verify_firebase_jwt(authorization: str = Header(...)) -> AuthResult:
 
     # Firebase JWT 검증
     payload = await firebase_verifier.verify(token)
+    firebase_uid = payload.get("sub")
+
+    # Convert firebase_uid to DB user UUID
+    from sqlalchemy import select
+    from app.domain.auth.models.user import User
+
+    result = await db.execute(
+        select(User.id).where(User.firebase_uid == firebase_uid)
+    )
+    db_user_id = result.scalar_one_or_none()
+
+    if not db_user_id:
+        # User not found - return firebase_uid anyway (will create during login)
+        user_id = firebase_uid
+    else:
+        user_id = str(db_user_id)
 
     return AuthResult(
-        user_id=payload.get("sub"),
+        user_id=user_id,
         email=payload.get("email"),
         name=payload.get("name"),
         picture=payload.get("picture"),
