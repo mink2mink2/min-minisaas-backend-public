@@ -126,6 +126,7 @@ async def verify_any_platform(
     request: Request,
     x_platform: str = Header(..., alias="X-Platform"),
     authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
 ) -> AuthResult:
     """
     공통 엔드포인트용 - X-Platform 헤더로 분기
@@ -136,6 +137,7 @@ async def verify_any_platform(
         request: FastAPI Request
         x_platform: X-Platform 헤더 ("web" | "mobile" | "desktop" | "device")
         authorization: Authorization 헤더
+        db: AsyncSession
 
     Returns:
         AuthResult
@@ -146,7 +148,7 @@ async def verify_any_platform(
     if x_platform == "web":
         return await verify_web_session(request)
     elif x_platform == "mobile":
-        return await verify_firebase_jwt(authorization=authorization or "")
+        return await verify_firebase_jwt(authorization=authorization or "", db=db)
     elif x_platform in ("desktop", "device"):
         return await verify_self_jwt(authorization=authorization or "")
     else:
