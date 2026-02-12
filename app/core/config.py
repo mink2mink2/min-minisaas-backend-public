@@ -1,6 +1,7 @@
 """설정 모듈"""
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 class Settings(BaseSettings):
     # Environment
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_PASSWORD: Optional[str] = None
 
     # Security
     SECRET_KEY: str = "REPLACE_WITH_SECURE_RANDOM_KEY"
@@ -45,6 +47,19 @@ class Settings(BaseSettings):
     # Slack Monitoring
     SLACK_WEBHOOK_URL: Optional[str] = None
     SECURITY_ALERT_THRESHOLD: str = "LOW"  # LOW, MEDIUM, HIGH
+
+    @property
+    def REDIS_URL_WITH_AUTH(self) -> str:
+        """REDIS_PASSWORD가 있고 URL에 인증정보가 없으면 자동 주입."""
+        parsed = urlsplit(self.REDIS_URL)
+
+        if not self.REDIS_PASSWORD or "@" in parsed.netloc:
+            return self.REDIS_URL
+
+        netloc = f":{self.REDIS_PASSWORD}@{parsed.netloc}"
+        return urlunsplit(
+            (parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)
+        )
 
     class Config:
         env_file = ".env"

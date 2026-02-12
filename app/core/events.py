@@ -95,7 +95,7 @@ class EventBus:
     async def connect(self):
         """Redis 연결"""
         try:
-            self.redis = redis.from_url(settings.REDIS_URL)
+            self.redis = redis.from_url(settings.REDIS_URL_WITH_AUTH)
         except Exception:
             self.redis = None
 

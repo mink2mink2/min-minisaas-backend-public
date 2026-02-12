@@ -48,6 +48,9 @@ async def login_web(
         picture=auth_result.picture,
     )
 
+    # Update auth_result.user_id to DB user UUID (not Firebase UID)
+    auth_result.user_id = str(user.id)
+
     # 3. 세션 생성 (플랫폼별) - Request를 metadata에 포함
     auth_result.metadata["request"] = request
     session_data = await strategy.create_session(auth_result)
@@ -56,7 +59,7 @@ async def login_web(
     response_data = {
         "success": True,
         "message": "가입 완료! 10포인트 지급" if is_new else "로그인 성공",
-        "user": UserResponse.model_validate(user).model_dump(),
+        "user": UserResponse.model_validate(user).model_dump(mode='json'),
         "is_new_user": is_new,
         "expires": session_data.get("expires"),
     }

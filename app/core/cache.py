@@ -39,4 +39,4 @@ class RedisCache:
             await self.redis.delete(*keys)
 
 # 전역 캐시 인스턴스
-cache = RedisCache(settings.REDIS_URL)
+cache = RedisCache(settings.REDIS_URL_WITH_AUTH)

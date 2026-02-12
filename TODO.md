@@ -258,6 +258,23 @@ TARGET ACHIEVED + BONUS!
 ### Test Coverage
 - **Total Tests:** 76/76 PASSING ✅
 - **Task 1:** 5 tests (token reuse detection)
+
+---
+
+## 🆕 Next Session TODO (Database Testing)
+
+### Task 9: Database Automation & Runtime Validation
+
+**Status:** ⬜ Pending
+**Priority:** 🟡 HIGH
+**Goal:** 최초 설치/업데이트 시 DB/Redis 상태를 자동 검증하고 회귀를 방지
+
+#### Checklist
+- [ ] `make setup` 재검증 (bootstrap + migrate + verify)
+- [ ] `.venv/bin/pytest -q tests/test_runtime_connectivity.py` 실행 및 결과 기록
+- [ ] `.venv/bin/pytest -q tests/test_bootstrap_db.py` 실행 및 결과 기록
+- [ ] 배포 절차에 `make migrate && make verify`를 필수 단계로 문서 반영 여부 확인
+- [ ] DB 이름/접속정보(`DATABASE_URL`) 변경 시 bootstrap 멱등성 재검증
 - **Task 2:** 5 tests (session fixation prevention)
 - **Task 3:** 6 tests (rate limiting & rotation)
 - **Task 4:** 7 tests (unified error responses)

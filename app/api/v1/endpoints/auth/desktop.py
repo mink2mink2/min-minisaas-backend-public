@@ -50,6 +50,9 @@ async def login_desktop(
         picture=auth_result.picture,
     )
 
+    # Update auth_result.user_id to DB user UUID (not Google OAuth ID)
+    auth_result.user_id = str(user.id)
+
     # 3. 세션/토큰 생성 (플랫폼별)
     session_data = await strategy.create_session(auth_result)
 
@@ -57,7 +60,7 @@ async def login_desktop(
     response_data = {
         "success": True,
         "message": "가입 완료! 10포인트 지급" if is_new else "로그인 성공",
-        "user": UserResponse.model_validate(user).model_dump(),
+        "user": UserResponse.model_validate(user).model_dump(mode='json'),
         "is_new_user": is_new,
     }
     return await strategy.build_response(response_data, session_data)

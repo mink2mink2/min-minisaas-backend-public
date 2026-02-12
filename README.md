@@ -22,6 +22,21 @@ python api/app/main.py
 
 ## 📝 개발
 
+### DB 자동화 (최초 설치/업데이트)
+```bash
+# 최초 1회: DB 생성 + 마이그레이션 + 런타임 검증
+make setup
+
+# 개별 실행
+make bootstrap   # DB 없으면 생성
+make migrate     # alembic upgrade head
+make verify      # postgres/redis 연결 점검
+```
+
+### DB 문서
+- Migration 운영 절차: `docs/DB_MIGRATION_WORKFLOW.md`
+- 현재 스키마 개요: `docs/DB_SCHEMA_OVERVIEW.md`
+
 ### Code Style
 - **Format**: Black
 - **Import Sort**: isort

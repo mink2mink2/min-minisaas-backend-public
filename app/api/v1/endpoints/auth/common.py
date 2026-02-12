@@ -164,7 +164,7 @@ async def get_current_user(
 
     return {
         "success": True,
-        "user": UserResponse.model_validate(user).model_dump(),
+        "user": UserResponse.model_validate(user).model_dump(mode='json'),
         "csrf_token": csrf_token,
     }
 
