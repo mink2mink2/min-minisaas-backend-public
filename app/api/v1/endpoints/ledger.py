@@ -1,21 +1,25 @@
 """공개 원장 API 엔드포인트"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.services.ledger_service import LedgerService
-from features.points.backend.services.transaction_service import TransactionService
 from datetime import date
 
-router = APIRouter(prefix="/ledger", tags=["ledger"])
+from app.core.database import get_db
+from app.api.v1.dependencies.auth import verify_any_platform
+from app.api.v1.dependencies.api_key import verify_api_key
+from app.core.auth import AuthResult
+from app.domain.points.services.ledger_service import LedgerService
+from app.domain.points.services.transaction_service import TransactionService
+
+router = APIRouter(prefix="/verify", tags=["ledger"])
 
 
 @router.get("/my-chain")
 async def verify_my_chain(
-    user_id: str,
-    db: AsyncSession = Depends(get_db)
+    current_user: AuthResult = Depends(verify_any_platform),
+    api_key: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    자신의 거래 체인 검증
+    """자신의 거래 체인 검증
 
     응답:
     - status: "valid" 또는 "invalid"
@@ -24,27 +28,26 @@ async def verify_my_chain(
     """
     try:
         tx_service = TransactionService(db)
-        result = await tx_service.verify_user_chain(user_id)
-        return result
+        result = await tx_service.verify_user_chain(current_user.user_id)
+        return result.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/my-transactions")
 async def get_my_transactions(
-    user_id: str,
-    db: AsyncSession = Depends(get_db)
+    current_user: AuthResult = Depends(verify_any_platform),
+    api_key: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    자신의 거래 내역 조회 (해시 포함)
-    """
+    """자신의 거래 내역 조회 (해시 포함)"""
     try:
         tx_service = TransactionService(db)
-        transactions = await tx_service.get_user_chain(user_id)
+        transactions = await tx_service.get_user_chain(current_user.user_id)
 
         return {
             "status": "success",
-            "user_id": str(user_id),
+            "user_id": str(current_user.user_id),
             "transaction_count": len(transactions),
             "transactions": [
                 {
@@ -109,12 +112,17 @@ async def get_ledger_root(
 @router.post("/generate-daily/{date_str}")
 async def generate_daily_ledger(
     date_str: str,
-    db: AsyncSession = Depends(get_db)
+    api_key: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    일일 공개 원장 생성 (관리자용)
+    """일일 공개 원장 생성 (관리자용)
 
     날짜 형식: YYYY-MM-DD
+
+    Args:
+        date_str: 대상 날짜
+        api_key: API 키 (어드민만 가능)
+        db: 데이터베이스 세션
     """
     try:
         # 날짜 파싱

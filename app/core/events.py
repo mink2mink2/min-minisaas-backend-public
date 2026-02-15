@@ -267,6 +267,55 @@ class PDFFileDeletedEvent(Event):
 
 
 # ============================================================================
+# Points Domain Events
+# ============================================================================
+
+@dataclass
+class PointsChargedEvent(Event):
+    """포인트 충전 이벤트"""
+    def __init__(self, user_id: str, amount: int, balance_after: int, description: str):
+        super().__init__(
+            event_type="points.charged",
+            payload={
+                "user_id": user_id,
+                "amount": amount,
+                "balance_after": balance_after,
+                "description": description,
+            }
+        )
+
+
+@dataclass
+class PointsConsumedEvent(Event):
+    """포인트 사용 이벤트"""
+    def __init__(self, user_id: str, amount: int, balance_after: int, description: str):
+        super().__init__(
+            event_type="points.consumed",
+            payload={
+                "user_id": user_id,
+                "amount": amount,
+                "balance_after": balance_after,
+                "description": description,
+            }
+        )
+
+
+@dataclass
+class PointsRefundedEvent(Event):
+    """포인트 환급 이벤트"""
+    def __init__(self, user_id: str, amount: int, balance_after: int, description: str):
+        super().__init__(
+            event_type="points.refunded",
+            payload={
+                "user_id": user_id,
+                "amount": amount,
+                "balance_after": balance_after,
+                "description": description,
+            }
+        )
+
+
+# ============================================================================
 # Event Bus
 # ============================================================================
 

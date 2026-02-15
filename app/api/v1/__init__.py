@@ -3,7 +3,8 @@ from fastapi import APIRouter
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.board import board_router
 from app.api.v1.endpoints.pdf import pdf_router
-# from app.api.v1.endpoints import chat, points, ledger
+from app.api.v1.endpoints.points import router as points_router
+from app.api.v1.endpoints.ledger import router as ledger_router
 
 api_router = APIRouter()
 
@@ -16,7 +17,8 @@ api_router.include_router(board_router)
 # PDF endpoints (file upload, conversion, status)
 api_router.include_router(pdf_router)
 
-# TODO: Uncomment when features modules are available
-# api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
-# api_router.include_router(points.router, prefix="/points", tags=["points"])
-# api_router.include_router(ledger.router, prefix="/verify", tags=["ledger"])
+# Points endpoints (balance, charge, consume, history)
+api_router.include_router(points_router)
+
+# Ledger endpoints (verification, integrity check)
+api_router.include_router(ledger_router)

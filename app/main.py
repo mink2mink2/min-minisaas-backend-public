@@ -7,6 +7,7 @@ from app.core.exceptions import AuthException, auth_exception_handler
 from app.core.events import event_bus
 from app.core.notifications.notification_service import notification_service
 from app.domain.pdf.services.pdf_event_handlers import register_pdf_event_handlers
+from app.domain.points.services.points_event_handlers import register_points_event_handlers
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
@@ -23,6 +24,9 @@ async def startup():
 
     # PDF 이벤트 핸들러 등록
     await register_pdf_event_handlers(event_bus)
+
+    # 포인트 이벤트 핸들러 등록
+    await register_points_event_handlers(event_bus)
 
 # CORS
 app.add_middleware(

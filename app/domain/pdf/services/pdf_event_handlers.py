@@ -2,7 +2,7 @@
 
 책임:
 - PDF 이벤트 수신 및 처리
-- 포인트 차감
+- 포인트 차감 (PointService를 통함)
 - 알림 발행
 - 로깅
 """
@@ -10,16 +10,14 @@ import logging
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
 from app.core.events import (
     PDFFileCreatedEvent,
     PDFConversionCompletedEvent,
     PDFFileDeletedEvent,
     Event,
 )
-from app.models.transaction import Transaction, TransactionType
-from app.domain.auth.models.user import User
 from app.core.database import get_db
+from app.domain.points.services.point_service import PointService
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,8 @@ class PDFEventHandlers:
     ):
         """PDF 변환 완료 이벤트 처리
 
-        - 포인트 차감
+        - PointService를 통한 포인트 차감
+        - 해시 체인 자동 생성
         - 변환 완료 알림
         - 거래 기록
 
@@ -74,51 +73,19 @@ class PDFEventHandlers:
                 # Convert string user_id to UUID
                 user_id = UUID(user_id_str) if isinstance(user_id_str, str) else user_id_str
 
-                # 1. User의 포인트 조회
-                user_query = select(User).where(User.id == user_id)
-                user_result = await db.execute(user_query)
-                user = user_result.scalar_one_or_none()
-
-                if not user:
-                    logger.error(f"❌ 사용자를 찾을 수 없음: user_id={user_id}")
-                    return
-
-                # 현재 포인트 (차감 전)
-                current_points = user.points
-
-                # 2. 포인트 차감 (음수 방지)
-                new_points = max(0, current_points - conversion_cost)
-                points_deducted = current_points - new_points
-
-                # User 포인트 업데이트
-                await db.execute(
-                    update(User)
-                    .where(User.id == user_id)
-                    .values(points=new_points)
-                )
-
-                # 3. Transaction 레코드 생성 (감시 추적용)
-                transaction = Transaction(
+                # PointService를 통한 포인트 차감
+                # (해시 체인 자동 생성, 트랜잭션 기록)
+                point_service = PointService(db)
+                await point_service.consume(
                     user_id=user_id,
-                    type=TransactionType.CONSUME,
-                    amount=points_deducted,
-                    balance_after=new_points,
-                    description=f"PDF 변환 비용 (file_id={file_id})",
+                    amount=conversion_cost,
+                    description=f"PDF 변환 비용",
                     idempotency_key=f"pdf_conversion_{file_id}",
-                    prev_hash=None,  # TODO: 해시 체인 구현
-                    current_hash="",  # TODO: 해시 체인 구현
-                    tx_data=f"{{\"file_id\": \"{file_id}\", \"conversion_cost\": {conversion_cost}}}",
                 )
-                db.add(transaction)
-
-                # 커밋
-                await db.commit()
 
                 logger.info(
                     f"💰 포인트 차감 완료: user_id={user_id}, "
-                    f"deducted={points_deducted}, "
-                    f"balance_before={current_points}, "
-                    f"balance_after={new_points}"
+                    f"cost={conversion_cost}"
                 )
             except Exception as e:
                 await db.rollback()
