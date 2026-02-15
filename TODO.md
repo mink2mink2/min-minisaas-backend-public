@@ -1,7 +1,7 @@
 # Security Implementation TODO - Min-Minisaas Backend
 
 **Status:** 85% Complete (P1 + P2 + P3[Task 5] + P4 Finished)
-**Last Updated:** Feb 11, 2026
+**Last Updated:** Feb 15, 2026
 **Overall Progress:** 6/7 Tasks ✅
 
 ---
@@ -281,6 +281,52 @@ TARGET ACHIEVED + BONUS!
 - **Task 5:** 20 tests (CSRF token protection) ⭐ NEW!
 - **Foundation:** 32 tests (endpoint imports, health, etc.)
 
+---
+
+## 🆕 Chat Domain (MVP) - 2026-02-15
+
+> 이 섹션은 보안 태스크(P1~P4)와 별도로, 채팅 기능 구현 현황을 추적합니다.
+
+### Task 10: Chat Domain Modularization + Event-driven Integration
+
+**Status:** ✅ COMPLETED  
+**Priority:** 🟡 HIGH  
+**Scope:** `app/domain/chat/*`, `app/api/v1/endpoints/chat.py`, EventBus 연동
+
+#### What was implemented
+- ✅ 독립 도메인 추가: `ChatRoom`, `ChatRoomMember`, `ChatMessage`
+- ✅ 독립 서비스 추가: 방 생성/조회, 메시지 전송/조회, 멤버십 검증
+- ✅ 실시간 게이트웨이 추가: 방 단위 WebSocket 연결 관리
+- ✅ 이벤트드리븐 처리:
+  - `chat.room.created`
+  - `chat.message.created`
+- ✅ Event handler에서 메시지 생성 이벤트를 WebSocket 브로드캐스트로 분리 처리
+- ✅ API 라우터 등록: `/api/v1/chat/*`
+- ✅ DB 모델 레지스트리 등록 + Alembic 마이그레이션 추가
+
+#### Endpoints (MVP)
+- `GET /api/v1/chat/rooms`
+- `POST /api/v1/chat/rooms`
+- `GET /api/v1/chat/rooms/{room_id}/messages`
+- `POST /api/v1/chat/rooms/{room_id}/messages`
+- `WS /api/v1/chat/ws/rooms/{room_id}`
+
+#### Added migration
+- `alembic/versions/20260215_0004_chat_domain.py`
+  - `chat_rooms`
+  - `chat_room_members`
+  - `chat_messages`
+
+#### Verification
+- ✅ `tests/test_chat_endpoints.py` 추가
+- ✅ `pytest -q tests/test_chat_endpoints.py` 통과 (3 passed)
+
+#### Follow-ups
+- [ ] Chat E2E 테스트 추가 (room create → send → ws receive)
+- [ ] 읽음/전달 상태 모델링
+- [ ] 메시지 수정/삭제 이벤트
+- [ ] 방 초대/강퇴 권한 정책
+
 ### Test Commands
 ```bash
 # Run all tests
@@ -352,6 +398,6 @@ If pursuing P3 tasks:
 
 ---
 
-**Last Updated:** Feb 11, 2026
+**Last Updated:** Feb 15, 2026
 **Completed By:** Claude Code + AI Assistant
 **Next Review:** Consider P3 tasks 6-7 (mTLS, HSM) for enterprise deployment

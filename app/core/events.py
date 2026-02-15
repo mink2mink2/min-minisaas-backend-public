@@ -205,6 +205,50 @@ class BoardCommentLikedEvent(Event):
 
 
 # ============================================================================
+# Chat Domain Events
+# ============================================================================
+
+@dataclass
+class ChatRoomCreatedEvent(Event):
+    """채팅방 생성 이벤트"""
+    def __init__(self, room_id: str, created_by: str, member_count: int, is_group: bool):
+        super().__init__(
+            event_type="chat.room.created",
+            payload={
+                "room_id": room_id,
+                "created_by": created_by,
+                "member_count": member_count,
+                "is_group": is_group,
+            },
+        )
+
+
+@dataclass
+class ChatMessageCreatedEvent(Event):
+    """채팅 메시지 생성 이벤트"""
+    def __init__(
+        self,
+        room_id: str,
+        message_id: str,
+        sender_id: str,
+        content: str,
+        created_at: str,
+        message_type: str = "text",
+    ):
+        super().__init__(
+            event_type="chat.message.created",
+            payload={
+                "room_id": room_id,
+                "message_id": message_id,
+                "sender_id": sender_id,
+                "content": content,
+                "message_type": message_type,
+                "created_at": created_at,
+            },
+        )
+
+
+# ============================================================================
 # PDF Domain Events
 # ============================================================================
 

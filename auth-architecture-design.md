@@ -1086,3 +1086,73 @@ app/
 *   **재사용성:** 기술적 인증 로직만 따로 떼어내어 다른 서비스에서 활용 가능.
 *   **유연성:** 인증 방식(Firebase -> 자체 DB 등) 변경 시 Core만 수정, 비즈니스 로직(Domain) 보호.
 *   **응집도:** 각 레이어가 명확한 책임 범위를 가짐.
+
+---
+
+## 18. 2026-02-15 Addendum: Chat Domain Architecture (MVP)
+
+인증 아키텍처를 유지한 채, 채팅을 **독립 도메인 + 이벤트드리븐** 방식으로 추가했습니다.
+
+### 18.1 설계 원칙
+
+1. 채팅 로직은 `domain/chat`에 격리
+2. API 레이어는 서비스 orchestration만 수행
+3. 실시간 브로드캐스트는 이벤트 핸들러에서 처리 (서비스와 분리)
+4. 기존 auth/board/pdf 도메인과 직접 결합 금지
+
+### 18.2 모듈 구조
+
+```text
+app/
+├── domain/chat/
+│   ├── models/
+│   │   ├── room.py             # ChatRoom, ChatRoomMember
+│   │   └── message.py          # ChatMessage
+│   ├── schemas/
+│   │   └── chat.py             # Room/Message DTO
+│   └── services/
+│       ├── chat_service.py     # 비즈니스 로직
+│       ├── realtime_gateway.py # WS 연결 관리자
+│       └── chat_event_handlers.py
+│
+├── api/v1/endpoints/
+│   └── chat.py                 # REST + WS 엔드포인트
+│
+└── core/events.py              # chat.room.created / chat.message.created
+```
+
+### 18.3 이벤트 흐름
+
+```text
+POST /chat/rooms/{room_id}/messages
+  -> ChatService.send_message()
+  -> event_bus.emit("chat.message.created")
+  -> ChatEventHandlers.handle_message_created()
+  -> ChatRealtimeGateway.broadcast_json(room_id, payload)
+```
+
+### 18.4 Chat API (MVP)
+
+```text
+GET  /api/v1/chat/rooms
+POST /api/v1/chat/rooms
+GET  /api/v1/chat/rooms/{room_id}/messages
+POST /api/v1/chat/rooms/{room_id}/messages
+WS   /api/v1/chat/ws/rooms/{room_id}
+```
+
+인증 요구사항:
+- `X-API-Key` 필수
+- `X-Platform` + 플랫폼별 인증(Authorization 또는 web session cookie) 필수
+
+### 18.5 데이터 모델 (MVP)
+
+- `chat_rooms`
+  - `id`, `name`, `is_group`, `created_by`, timestamps, `is_deleted`
+- `chat_room_members`
+  - `room_id`, `user_id`, `role`, timestamps, `is_deleted`
+- `chat_messages`
+  - `room_id`, `sender_id`, `content`, `message_type`, timestamps, `is_deleted`
+
+마이그레이션:
+- `alembic/versions/20260215_0004_chat_domain.py`

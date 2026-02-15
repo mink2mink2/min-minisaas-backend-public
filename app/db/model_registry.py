@@ -16,6 +16,10 @@ from app.domain.board.models.post import BoardPost  # noqa: F401
 from app.domain.board.models.comment import Comment  # noqa: F401
 from app.domain.board.models.like_bookmark import PostLike, PostBookmark, CommentLike  # noqa: F401
 
+# Chat models
+from app.domain.chat.models.room import ChatRoom, ChatRoomMember  # noqa: F401
+from app.domain.chat.models.message import ChatMessage  # noqa: F401
+
 # PDF Domain models
 from app.domain.pdf.models.pdf_file import PDFFile  # noqa: F401
 
@@ -34,5 +38,8 @@ __all__ = [
     "PostLike",
     "PostBookmark",
     "CommentLike",
+    "ChatRoom",
+    "ChatRoomMember",
+    "ChatMessage",
     "PDFFile",
 ]
