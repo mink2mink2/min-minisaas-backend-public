@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     SLACK_WEBHOOK_URL: Optional[str] = None
     SECURITY_ALERT_THRESHOLD: str = "LOW"  # LOW, MEDIUM, HIGH
 
+    # MinIO
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_SECURE: bool = False
+
     @property
     def REDIS_URL_WITH_AUTH(self) -> str:
         """REDIS_PASSWORD가 있고 URL에 인증정보가 없으면 자동 주입."""

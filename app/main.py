@@ -6,6 +6,7 @@ from app.core.cache import cache
 from app.core.exceptions import AuthException, auth_exception_handler
 from app.core.events import event_bus
 from app.core.notifications.notification_service import notification_service
+from app.domain.pdf.services.pdf_event_handlers import register_pdf_event_handlers
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
@@ -16,9 +17,12 @@ app.add_exception_handler(AuthException, auth_exception_handler)
 async def startup():
     await cache.init()
     await event_bus.connect()
-    
+
     # 이벤트 핸들러 등록
     event_bus.subscribe("security.alert", notification_service.handle_security_alert)
+
+    # PDF 이벤트 핸들러 등록
+    await register_pdf_event_handlers(event_bus)
 
 # CORS
 app.add_middleware(

@@ -16,6 +16,9 @@ from app.domain.board.models.post import BoardPost  # noqa: F401
 from app.domain.board.models.comment import Comment  # noqa: F401
 from app.domain.board.models.like_bookmark import PostLike, PostBookmark, CommentLike  # noqa: F401
 
+# PDF Domain models
+from app.domain.pdf.models.pdf_file import PDFFile  # noqa: F401
+
 
 __all__ = [
     "EventLog",
@@ -31,4 +34,5 @@ __all__ = [
     "PostLike",
     "PostBookmark",
     "CommentLike",
+    "PDFFile",
 ]

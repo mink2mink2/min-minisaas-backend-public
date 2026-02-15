@@ -203,6 +203,69 @@ class BoardCommentLikedEvent(Event):
             }
         )
 
+
+# ============================================================================
+# PDF Domain Events
+# ============================================================================
+
+@dataclass
+class PDFFileCreatedEvent(Event):
+    """PDF 파일 생성 이벤트"""
+    def __init__(self, user_id: int, file_id: str, filename: str, file_size: int):
+        super().__init__(
+            event_type="pdf.file.created",
+            payload={
+                "user_id": user_id,
+                "file_id": file_id,
+                "filename": filename,
+                "file_size": file_size,
+            }
+        )
+
+
+@dataclass
+class PDFFileStatusChangedEvent(Event):
+    """PDF 파일 상태 변경 이벤트"""
+    def __init__(self, user_id: int, file_id: str, old_status: str, new_status: str):
+        super().__init__(
+            event_type="pdf.file.status_changed",
+            payload={
+                "user_id": user_id,
+                "file_id": file_id,
+                "old_status": old_status,
+                "new_status": new_status,
+            }
+        )
+
+
+@dataclass
+class PDFConversionCompletedEvent(Event):
+    """PDF 변환 완료 이벤트"""
+    def __init__(self, user_id: int, file_id: str, output_path: str, conversion_cost: int):
+        super().__init__(
+            event_type="pdf.conversion.completed",
+            payload={
+                "user_id": user_id,
+                "file_id": file_id,
+                "output_path": output_path,
+                "conversion_cost": conversion_cost,
+            }
+        )
+
+
+@dataclass
+class PDFFileDeletedEvent(Event):
+    """PDF 파일 삭제 이벤트"""
+    def __init__(self, user_id: int, file_id: str):
+        super().__init__(
+            event_type="pdf.file.deleted",
+            payload={
+                "user_id": user_id,
+                "file_id": file_id,
+            }
+        )
+
+
 # ============================================================================
 # Event Bus
 # ============================================================================
