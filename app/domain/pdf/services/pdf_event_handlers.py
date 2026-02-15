@@ -8,14 +8,17 @@
 """
 import logging
 from typing import Optional
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from app.core.events import (
     PDFFileCreatedEvent,
     PDFConversionCompletedEvent,
     PDFFileDeletedEvent,
     Event,
 )
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionType
+from app.domain.auth.models.user import User
 from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -55,31 +58,75 @@ class PDFEventHandlers:
             event: PDFConversionCompletedEvent
             db: 데이터베이스 세션
         """
-        user_id = event.payload["user_id"]
+        user_id_str = event.payload["user_id"]
         conversion_cost = event.payload["conversion_cost"]
+        file_id = event.payload["file_id"]
 
         logger.info(
             f"✅ PDF 변환 완료: "
-            f"user_id={user_id}, "
-            f"file_id={event.payload['file_id']}, "
+            f"user_id={user_id_str}, "
+            f"file_id={file_id}, "
             f"cost={conversion_cost}"
         )
 
         if conversion_cost > 0:
             try:
-                # TODO: Points Service 호출해서 포인트 차감
-                # 1. User 포인트 업데이트
-                # 2. Transaction 기록
-                # 3. EventLog 기록
+                # Convert string user_id to UUID
+                user_id = UUID(user_id_str) if isinstance(user_id_str, str) else user_id_str
+
+                # 1. User의 포인트 조회
+                user_query = select(User).where(User.id == user_id)
+                user_result = await db.execute(user_query)
+                user = user_result.scalar_one_or_none()
+
+                if not user:
+                    logger.error(f"❌ 사용자를 찾을 수 없음: user_id={user_id}")
+                    return
+
+                # 현재 포인트 (차감 전)
+                current_points = user.points
+
+                # 2. 포인트 차감 (음수 방지)
+                new_points = max(0, current_points - conversion_cost)
+                points_deducted = current_points - new_points
+
+                # User 포인트 업데이트
+                await db.execute(
+                    update(User)
+                    .where(User.id == user_id)
+                    .values(points=new_points)
+                )
+
+                # 3. Transaction 레코드 생성 (감시 추적용)
+                transaction = Transaction(
+                    user_id=user_id,
+                    type=TransactionType.CONSUME,
+                    amount=points_deducted,
+                    balance_after=new_points,
+                    description=f"PDF 변환 비용 (file_id={file_id})",
+                    idempotency_key=f"pdf_conversion_{file_id}",
+                    prev_hash=None,  # TODO: 해시 체인 구현
+                    current_hash="",  # TODO: 해시 체인 구현
+                    tx_data=f"{{\"file_id\": \"{file_id}\", \"conversion_cost\": {conversion_cost}}}",
+                )
+                db.add(transaction)
+
+                # 커밋
+                await db.commit()
 
                 logger.info(
-                    f"💰 포인트 차감: user_id={user_id}, "
-                    f"amount={conversion_cost}"
+                    f"💰 포인트 차감 완료: user_id={user_id}, "
+                    f"deducted={points_deducted}, "
+                    f"balance_before={current_points}, "
+                    f"balance_after={new_points}"
                 )
             except Exception as e:
+                await db.rollback()
                 logger.error(
-                    f"❌ 포인트 차감 실패: user_id={user_id}, error={e}"
+                    f"❌ 포인트 차감 실패: user_id={user_id_str}, error={str(e)}"
                 )
+                # 에러가 발생해도 이벤트 처리는 계속 진행
+                # (나중에 수동 개입이 필요할 수 있음)
 
         # TODO: 변환 완료 알림 발송
 
