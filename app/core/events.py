@@ -81,6 +81,128 @@ class SecurityAlertEvent(Event):
             }
         )
 
+
+@dataclass
+class BoardPostCreatedEvent(Event):
+    """게시글 생성 이벤트"""
+    def __init__(self, user_id: str, post_id: str, title: str, category_id: str = None):
+        super().__init__(
+            event_type="board.post.created",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id,
+                "title": title,
+                "category_id": category_id
+            }
+        )
+
+
+@dataclass
+class BoardPostUpdatedEvent(Event):
+    """게시글 수정 이벤트"""
+    def __init__(self, user_id: str, post_id: str):
+        super().__init__(
+            event_type="board.post.updated",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id
+            }
+        )
+
+
+@dataclass
+class BoardPostDeletedEvent(Event):
+    """게시글 삭제 이벤트"""
+    def __init__(self, user_id: str, post_id: str):
+        super().__init__(
+            event_type="board.post.deleted",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id
+            }
+        )
+
+
+@dataclass
+class BoardPostViewedEvent(Event):
+    """게시글 조회 이벤트"""
+    def __init__(self, user_id: str, post_id: str):
+        super().__init__(
+            event_type="board.post.viewed",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id
+            }
+        )
+
+
+@dataclass
+class BoardPostLikedEvent(Event):
+    """게시글 좋아요 이벤트"""
+    def __init__(self, user_id: str, post_id: str, liked: bool):
+        super().__init__(
+            event_type="board.post.liked",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id,
+                "liked": liked
+            }
+        )
+
+
+@dataclass
+class BoardCommentCreatedEvent(Event):
+    """댓글 생성 이벤트"""
+    def __init__(self, user_id: str, post_id: str, comment_id: str):
+        super().__init__(
+            event_type="board.comment.created",
+            payload={
+                "user_id": user_id,
+                "post_id": post_id,
+                "comment_id": comment_id
+            }
+        )
+
+
+@dataclass
+class BoardCommentUpdatedEvent(Event):
+    """댓글 수정 이벤트"""
+    def __init__(self, user_id: str, comment_id: str):
+        super().__init__(
+            event_type="board.comment.updated",
+            payload={
+                "user_id": user_id,
+                "comment_id": comment_id
+            }
+        )
+
+
+@dataclass
+class BoardCommentDeletedEvent(Event):
+    """댓글 삭제 이벤트"""
+    def __init__(self, user_id: str, comment_id: str):
+        super().__init__(
+            event_type="board.comment.deleted",
+            payload={
+                "user_id": user_id,
+                "comment_id": comment_id
+            }
+        )
+
+
+@dataclass
+class BoardCommentLikedEvent(Event):
+    """댓글 좋아요 이벤트"""
+    def __init__(self, user_id: str, comment_id: str, liked: bool):
+        super().__init__(
+            event_type="board.comment.liked",
+            payload={
+                "user_id": user_id,
+                "comment_id": comment_id,
+                "liked": liked
+            }
+        )
+
 # ============================================================================
 # Event Bus
 # ============================================================================

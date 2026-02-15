@@ -10,6 +10,12 @@ from app.domain.auth.models.user import User  # noqa: F401
 from app.domain.auth.models.device import Device  # noqa: F401
 from app.domain.auth.models.security_log import SecurityLog  # noqa: F401
 
+# Board models
+from app.domain.board.models.category import BoardCategory  # noqa: F401
+from app.domain.board.models.post import BoardPost  # noqa: F401
+from app.domain.board.models.comment import Comment  # noqa: F401
+from app.domain.board.models.like_bookmark import PostLike, PostBookmark, CommentLike  # noqa: F401
+
 
 __all__ = [
     "EventLog",
@@ -19,4 +25,10 @@ __all__ = [
     "User",
     "Device",
     "SecurityLog",
+    "BoardCategory",
+    "BoardPost",
+    "Comment",
+    "PostLike",
+    "PostBookmark",
+    "CommentLike",
 ]
