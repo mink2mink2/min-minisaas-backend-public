@@ -1,10 +1,11 @@
 """블로그 비즈니스 로직"""
+import re
+import unicodedata
 from uuid import UUID
 from typing import Optional, List, Tuple
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update, delete
-from slugify import slugify
 
 from app.domain.blog.models.post import BlogPost
 from app.domain.blog.models.category import BlogCategory
@@ -13,22 +14,6 @@ from app.domain.blog.models.subscription import BlogSubscription
 from app.domain.auth.models.user import User
 from app.core.events import event_bus, Event
 from app.schemas.response import PaginatedResponse
-
-
-class BlogPostCreatedEvent(Event):
-    """블로그 게시글 생성 이벤트"""
-    post_id: str
-    author_id: str
-    title: str
-    tags: List[str]
-    published_at: str
-
-
-class BlogPostLikedEvent(Event):
-    """블로그 게시글 좋아요 이벤트"""
-    post_id: str
-    user_id: str
-    liked: bool  # True = liked, False = unliked
 
 
 class BlogService:
@@ -40,7 +25,12 @@ class BlogService:
     @staticmethod
     def generate_slug(title: str) -> str:
         """제목으로부터 slug 생성"""
-        base_slug = slugify(title)
+        normalized = unicodedata.normalize("NFKD", title).encode(
+            "ascii", "ignore"
+        ).decode("ascii")
+        base_slug = re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()
+        if not base_slug:
+            base_slug = "post"
         return base_slug[:200]  # Max 200 chars
 
     async def create_post(
@@ -80,17 +70,21 @@ class BlogService:
 
         self.db.add(post)
         await self.db.flush()
+        await self.db.commit()
         await self.db.refresh(post)
 
         # 발행된 경우 이벤트 발행
         if is_published:
             await event_bus.emit(
-                BlogPostCreatedEvent(
-                    post_id=str(post.id),
-                    author_id=str(author_id),
-                    title=title,
-                    tags=tags or [],
-                    published_at=post.published_at.isoformat(),
+                Event(
+                    event_type="blog.post.created",
+                    payload={
+                        "post_id": str(post.id),
+                        "author_id": str(author_id),
+                        "title": title,
+                        "tags": tags or [],
+                        "published_at": post.published_at.isoformat(),
+                    },
                 )
             )
 
@@ -339,10 +333,13 @@ class BlogService:
 
         # 이벤트 발행
         await event_bus.emit(
-            BlogPostLikedEvent(
-                post_id=str(post_id),
-                user_id=str(user_id),
-                liked=True,
+            Event(
+                event_type="blog.post.liked",
+                payload={
+                    "post_id": str(post_id),
+                    "user_id": str(user_id),
+                    "liked": True,
+                },
             )
         )
 
@@ -379,10 +376,13 @@ class BlogService:
 
         # 이벤트 발행
         await event_bus.emit(
-            BlogPostLikedEvent(
-                post_id=str(post_id),
-                user_id=str(user_id),
-                liked=False,
+            Event(
+                event_type="blog.post.liked",
+                payload={
+                    "post_id": str(post_id),
+                    "user_id": str(user_id),
+                    "liked": False,
+                },
             )
         )
 

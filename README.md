@@ -31,7 +31,9 @@ make setup
 make bootstrap   # DB 없으면 생성
 make migrate     # alembic upgrade head
 make seed-categories  # board 기본 카테고리 멱등 시드
-make verify      # postgres/redis 연결 점검
+make seed-blog-categories  # blog 기본 카테고리 멱등 시드
+make verify      # postgres/redis + 필수 스키마 점검 (실패 시 배포 중단)
+make verify-schema  # 스키마만 단독 점검
 ```
 
 ### 게시판 카테고리 운영 규칙
@@ -41,6 +43,7 @@ make verify      # postgres/redis 연결 점검
 ### DB 문서
 - Migration 운영 절차: `docs/DB_MIGRATION_WORKFLOW.md`
 - 현재 스키마 개요: `docs/DB_SCHEMA_OVERVIEW.md`
+- 스키마 가드 장애 기록: `docs/incidents/2026-02-16-blog-schema-mismatch.md`
 
 ### Code Style
 - **Format**: Black

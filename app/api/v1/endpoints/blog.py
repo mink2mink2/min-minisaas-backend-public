@@ -1,4 +1,5 @@
 """블로그 엔드포인트"""
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -27,6 +28,7 @@ from app.domain.blog.schemas.category import (
 from app.schemas.response import PaginatedResponse
 
 router = APIRouter(prefix="/blog", tags=["blog"])
+logger = logging.getLogger(__name__)
 
 
 async def _get_optional_user(
@@ -247,7 +249,7 @@ async def get_user_blog(
     }
 
 
-@router.get("/posts/{post_id}", response_model=dict)
+@router.get("/posts/{post_id}", response_model=BlogPostResponse)
 async def get_post(
     post_id: UUID,
     request: Request = None,
@@ -267,7 +269,7 @@ async def get_post(
     return await _build_post_response(post, user_id, service, db, include_subscriber_count=True)
 
 
-@router.post("/posts", response_model=dict, status_code=201)
+@router.post("/posts", response_model=BlogPostResponse, status_code=201)
 async def create_post(
     data: BlogPostCreate,
     auth: AuthResult = Depends(verify_any_platform),
@@ -290,12 +292,13 @@ async def create_post(
             is_published=data.is_published,
         )
     except Exception as e:
+        logger.exception("blog create_post failed")
         raise HTTPException(400, str(e))
 
     return await _build_post_response(post, author_id, service, db, include_subscriber_count=False)
 
 
-@router.put("/posts/{post_id}", response_model=dict)
+@router.put("/posts/{post_id}", response_model=BlogPostResponse)
 async def update_post(
     post_id: UUID,
     data: BlogPostUpdate,

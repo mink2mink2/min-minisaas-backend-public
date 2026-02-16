@@ -1,12 +1,6 @@
 """Blog services"""
-from app.domain.blog.services.blog_service import (  # noqa: F401
-    BlogService,
-    BlogPostCreatedEvent,
-    BlogPostLikedEvent,
-)
+from app.domain.blog.services.blog_service import BlogService  # noqa: F401
 
 __all__ = [
     "BlogService",
-    "BlogPostCreatedEvent",
-    "BlogPostLikedEvent",
 ]
