@@ -29,6 +29,50 @@ class ChatRoomResponse(BaseModel):
         from_attributes = True
 
 
+class ChatParticipantResponse(BaseModel):
+    """채팅방 참여자 요약"""
+
+    user_id: UUID
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    username: Optional[str] = None
+
+
+class ChatLastMessagePreview(BaseModel):
+    """채팅방 마지막 메시지 요약"""
+
+    content: str
+    sender_name: str
+    created_at: datetime
+
+
+class ChatRoomListItemResponse(BaseModel):
+    """채팅방 목록 아이템"""
+
+    id: UUID
+    name: str
+    is_group: bool
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+    member_count: int
+    participants: List[ChatParticipantResponse]
+    last_message: Optional[ChatLastMessagePreview] = None
+    unread_count: int = 0
+
+
+class ChatRoomListResponse(BaseModel):
+    """채팅방 목록 페이징 응답"""
+
+    items: List[ChatRoomListItemResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+    has_next: bool
+    has_prev: bool
+
+
 class ChatMessageCreate(BaseModel):
     """메시지 전송 요청"""
 
@@ -48,6 +92,18 @@ class ChatMessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ChatMessageListResponse(BaseModel):
+    """채팅 메시지 목록 페이징 응답"""
+
+    items: List[ChatMessageResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+    has_next: bool
+    has_prev: bool
 
 
 class ChatMessageBroadcast(BaseModel):

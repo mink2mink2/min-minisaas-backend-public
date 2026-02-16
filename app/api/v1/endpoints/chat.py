@@ -16,8 +16,10 @@ from app.core.security import decode_token
 from app.domain.auth.models.user import User
 from app.domain.chat.schemas.chat import (
     ChatMessageCreate,
+    ChatMessageListResponse,
     ChatMessageResponse,
     ChatRoomCreate,
+    ChatRoomListResponse,
     ChatRoomResponse,
 )
 from app.domain.chat.services.chat_service import ChatService
@@ -27,7 +29,42 @@ from app.schemas.response import PaginatedResponse
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.get("/rooms", response_model=dict)
+async def _list_room_messages(
+    room_id: UUID,
+    user_id: UUID,
+    page: int,
+    limit: int,
+    db: AsyncSession,
+) -> ChatMessageListResponse:
+    """채팅방 메시지 목록 공통 로직"""
+    service = ChatService(db)
+    try:
+        messages, total = await service.list_messages(
+            room_id=room_id,
+            user_id=user_id,
+            page=page,
+            limit=limit,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not a room member")
+
+    items = [
+        ChatMessageResponse(
+            id=message.id,
+            room_id=message.room_id,
+            sender_id=message.sender_id,
+            content=message.content,
+            message_type=message.message_type,
+            created_at=message.created_at,
+            updated_at=message.updated_at,
+        )
+        for message in messages
+    ]
+    payload = PaginatedResponse.create(items, total, page, limit).__dict__
+    return ChatMessageListResponse(**payload)
+
+
+@router.get("/rooms", response_model=ChatRoomListResponse)
 async def list_rooms(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -61,7 +98,8 @@ async def list_rooms(
     service = ChatService(db)
     items, total = await service.list_rooms_with_details(user_id=user_id, page=page, limit=limit)
 
-    return PaginatedResponse.create(items, total, page, limit).__dict__
+    payload = PaginatedResponse.create(items, total, page, limit).__dict__
+    return ChatRoomListResponse(**payload)
 
 
 @router.post("/rooms", response_model=ChatRoomResponse, status_code=201)
@@ -108,7 +146,7 @@ async def create_room(
     )
 
 
-@router.get("/rooms/{room_id}/messages", response_model=dict)
+@router.get("/rooms/{room_id}/messages", response_model=ChatMessageListResponse)
 async def list_messages(
     room_id: UUID,
     page: int = Query(1, ge=1),
@@ -118,30 +156,37 @@ async def list_messages(
     db: AsyncSession = Depends(get_db),
 ):
     """채팅방 메시지 목록"""
-    service = ChatService(db)
-    try:
-        messages, total = await service.list_messages(
-            room_id=room_id,
-            user_id=UUID(auth.user_id),
-            page=page,
-            limit=limit,
-        )
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Not a room member")
+    return await _list_room_messages(
+        room_id=room_id,
+        user_id=UUID(auth.user_id),
+        page=page,
+        limit=limit,
+        db=db,
+    )
 
-    items = [
-        ChatMessageResponse(
-            id=message.id,
-            room_id=message.room_id,
-            sender_id=message.sender_id,
-            content=message.content,
-            message_type=message.message_type,
-            created_at=message.created_at,
-            updated_at=message.updated_at,
-        )
-        for message in messages
-    ]
-    return PaginatedResponse.create(items, total, page, limit).__dict__
+
+@router.get("/rooms/messages", response_model=ChatMessageListResponse)
+async def list_messages_legacy(
+    room_id: Optional[UUID] = Query(None),
+    room_id_camel: Optional[UUID] = Query(None, alias="roomId"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    auth: AuthResult = Depends(verify_any_platform),
+    _: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """레거시 경로 호환: /chat/rooms/messages?room_id={uuid}"""
+    selected_room_id = room_id or room_id_camel
+    if selected_room_id is None:
+        raise HTTPException(status_code=400, detail="room_id(or roomId) is required")
+
+    return await _list_room_messages(
+        room_id=selected_room_id,
+        user_id=UUID(auth.user_id),
+        page=page,
+        limit=limit,
+        db=db,
+    )
 
 
 @router.post("/rooms/{room_id}/messages", response_model=ChatMessageResponse, status_code=201)

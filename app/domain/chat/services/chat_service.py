@@ -110,9 +110,12 @@ class ChatService:
         Returns:
             [
                 {
-                    "room_id": str,
+                    "id": str,
                     "name": str,
                     "is_group": bool,
+                    "created_by": str,
+                    "created_at": str,
+                    "member_count": int,
                     "participants": [{ "user_id", "name", "picture", "username" }],
                     "last_message": { "content", "sender_name", "created_at" },
                     "unread_count": int,
@@ -215,9 +218,12 @@ class ChatService:
 
             result_list.append(
                 {
-                    "room_id": str(room.id),
+                    "id": str(room.id),
                     "name": room.name,
                     "is_group": room.is_group,
+                    "created_by": str(room.created_by),
+                    "created_at": room.created_at.isoformat(),
+                    "member_count": len(participants),
                     "participants": participants,
                     "last_message": last_message,
                     "unread_count": unread_count,

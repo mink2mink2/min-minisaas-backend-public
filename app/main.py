@@ -3,8 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 from app.core.cache import cache
+from app.core.config import settings
 from app.core.exceptions import AuthException, auth_exception_handler
 from app.core.events import event_bus
+from app.core.fcm import initialize_firebase
 from app.core.notifications.notification_service import notification_service
 from app.domain.chat.services.chat_event_handlers import register_chat_event_handlers
 from app.domain.pdf.services.pdf_event_handlers import register_pdf_event_handlers
@@ -35,10 +37,14 @@ async def startup():
     await register_chat_event_handlers(event_bus)
 
     # FCM 서비스 상태 확인
-    if fcm_service and fcm_service.is_ready():
-        print("✓ Firebase Cloud Messaging (FCM) initialized successfully")
+    if settings.FCM_CREDENTIALS_PATH:
+        try:
+            initialize_firebase()
+            print("✓ Firebase Cloud Messaging (FCM) initialized successfully")
+        except Exception:
+            print("⚠ Firebase Cloud Messaging (FCM) initialization failed")
     else:
-        print("⚠ Firebase Cloud Messaging (FCM) not available or not configured")
+        print("⚠ Firebase Cloud Messaging (FCM) not configured")
 
 # CORS
 app.add_middleware(
