@@ -17,6 +17,24 @@ This document outlines 7 security enhancement tasks identified in the auth-archi
 
 ---
 
+## 🟦 Chat Domain Delivery Notes (2026-02-16)
+
+### Completed
+- [x] DB migration `20260215_0004` 적용 확인 (chat tables 반영)
+- [x] 앱/AI 빠른 진입용 문서 정리
+  - `docs/READ_THIS_FIRST.md`
+  - `docs/CHAT_BACKEND_QUICKSTART.md`
+- [x] 오래된 구현 히스토리 문서를 `backup/md-archive/`로 이동
+  - `ARCHIVE_INDEX.md` 작성으로 이동 사유/목록 기록
+
+### Remaining for chat MVP readiness
+- [ ] 사용자 검색 API 제공 (`/users/search?q=`)로 `member_ids` 입력 경로 확보
+- [ ] 1:1 room unique 정책(동일 사용자 쌍 방 재사용) 서버 규칙화
+- [ ] room list 응답에 상대 정보(이름/프로필) 포함
+- [ ] 웹 포함 WS 인증 정책 통일(헤더/쿠키/쿼리 전략 확정)
+
+---
+
 ## 🟢 Priority 1 - CRITICAL (Completed)
 
 ### Task 1: Implement Refresh Token Reuse Detection (Desktop)
