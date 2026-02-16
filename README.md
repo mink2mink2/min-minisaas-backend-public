@@ -24,14 +24,19 @@ python api/app/main.py
 
 ### DB 자동화 (최초 설치/업데이트)
 ```bash
-# 최초 1회: DB 생성 + 마이그레이션 + 런타임 검증
+# 최초 1회: DB 생성 + 마이그레이션 + 기본 카테고리 시드 + 런타임 검증
 make setup
 
 # 개별 실행
 make bootstrap   # DB 없으면 생성
 make migrate     # alembic upgrade head
+make seed-categories  # board 기본 카테고리 멱등 시드
 make verify      # postgres/redis 연결 점검
 ```
+
+### 게시판 카테고리 운영 규칙
+- 기본 카테고리는 `make setup`/`make seed-categories`에서 자동 보장됩니다.
+- 운영 중 카테고리 변경은 API(`POST/PUT /api/v1/board/categories`)로 관리합니다.
 
 ### DB 문서
 - Migration 운영 절차: `docs/DB_MIGRATION_WORKFLOW.md`

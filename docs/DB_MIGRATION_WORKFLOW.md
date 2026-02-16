@@ -7,7 +7,7 @@
 - 스키마 변경은 반드시 Alembic migration으로 관리합니다.
 - 운영 경로에서 `Base.metadata.create_all()`을 직접 호출하지 않습니다.
 - 최초 설치와 업데이트를 분리합니다.
-  - 최초 설치: `bootstrap + migrate + verify`
+  - 최초 설치: `bootstrap + migrate + seed-categories + verify`
   - 업데이트: `migrate + verify`
 
 ## 명령 요약
@@ -18,6 +18,7 @@ make setup
 # 개별 실행
 make bootstrap   # DB 없으면 생성
 make migrate     # alembic upgrade head
+make seed-categories  # board 기본 카테고리 멱등 시드
 make verify      # postgres/redis 연결 점검
 ```
 
