@@ -9,6 +9,8 @@ from app.core.notifications.notification_service import notification_service
 from app.domain.chat.services.chat_event_handlers import register_chat_event_handlers
 from app.domain.pdf.services.pdf_event_handlers import register_pdf_event_handlers
 from app.domain.points.services.points_event_handlers import register_points_event_handlers
+from app.domain.blog.events import blog_event_handlers  # noqa: F401
+from app.domain.push.events import push_event_handlers  # noqa: F401
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
@@ -31,6 +33,12 @@ async def startup():
 
     # 채팅 이벤트 핸들러 등록
     await register_chat_event_handlers(event_bus)
+
+    # FCM 서비스 상태 확인
+    if fcm_service and fcm_service.is_ready():
+        print("✓ Firebase Cloud Messaging (FCM) initialized successfully")
+    else:
+        print("⚠ Firebase Cloud Messaging (FCM) not available or not configured")
 
 # CORS
 app.add_middleware(

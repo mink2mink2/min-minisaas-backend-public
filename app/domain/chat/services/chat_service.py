@@ -61,7 +61,7 @@ class ChatService:
     async def list_rooms(
         self, user_id: UUID, page: int = 1, limit: int = 20
     ) -> Tuple[List[ChatRoom], int]:
-        """사용자 채팅방 목록"""
+        """사용자 채팅방 목록 (기본)"""
         membership_subquery = (
             select(ChatRoomMember.room_id)
             .where(
@@ -100,6 +100,132 @@ class ChatService:
         )
         rooms = list(room_result.scalars().all())
         return rooms, total
+
+    async def list_rooms_with_details(
+        self, user_id: UUID, page: int = 1, limit: int = 20
+    ) -> Tuple[List[dict], int]:
+        """
+        사용자 채팅방 목록 (상대 정보, 마지막 메시지 포함)
+
+        Returns:
+            [
+                {
+                    "room_id": str,
+                    "name": str,
+                    "is_group": bool,
+                    "participants": [{ "user_id", "name", "picture", "username" }],
+                    "last_message": { "content", "sender_name", "created_at" },
+                    "unread_count": int,
+                    "updated_at": str,
+                }
+            ]
+        """
+        from app.domain.auth.models.user import User
+        from sqlalchemy import func as sa_func
+
+        membership_subquery = (
+            select(ChatRoomMember.room_id)
+            .where(
+                and_(
+                    ChatRoomMember.user_id == user_id,
+                    ChatRoomMember.is_deleted.is_(False),
+                )
+            )
+            .subquery()
+        )
+
+        count_result = await self.db.execute(
+            select(sa_func.count())
+            .select_from(ChatRoom)
+            .where(
+                and_(
+                    ChatRoom.id.in_(select(membership_subquery.c.room_id)),
+                    ChatRoom.is_deleted.is_(False),
+                )
+            )
+        )
+        total = count_result.scalar() or 0
+
+        offset = (page - 1) * limit
+        room_result = await self.db.execute(
+            select(ChatRoom)
+            .where(
+                and_(
+                    ChatRoom.id.in_(select(membership_subquery.c.room_id)),
+                    ChatRoom.is_deleted.is_(False),
+                )
+            )
+            .order_by(ChatRoom.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        rooms = list(room_result.scalars().all())
+
+        result_list = []
+        for room in rooms:
+            # 1. 참여자 정보 조회
+            member_result = await self.db.execute(
+                select(User)
+                .join(ChatRoomMember)
+                .where(
+                    and_(
+                        ChatRoomMember.room_id == room.id,
+                        ChatRoomMember.is_deleted.is_(False),
+                    )
+                )
+            )
+            members = list(member_result.scalars().all())
+            participants = [
+                {
+                    "user_id": str(m.id),
+                    "name": m.name,
+                    "picture": m.picture,
+                    "username": m.username,
+                }
+                for m in members
+            ]
+
+            # 2. 마지막 메시지 조회
+            msg_result = await self.db.execute(
+                select(ChatMessage)
+                .where(
+                    and_(
+                        ChatMessage.room_id == room.id,
+                        ChatMessage.is_deleted.is_(False),
+                    )
+                )
+                .order_by(ChatMessage.created_at.desc())
+                .limit(1)
+            )
+            last_msg = msg_result.scalar_one_or_none()
+            last_message = None
+            if last_msg:
+                sender = await self.db.execute(
+                    select(User).where(User.id == last_msg.sender_id)
+                )
+                sender_user = sender.scalar_one_or_none()
+                last_message = {
+                    "content": last_msg.content,
+                    "sender_name": sender_user.name if sender_user else "Unknown",
+                    "created_at": last_msg.created_at.isoformat(),
+                }
+
+            # 3. 읽지 않은 메시지 수 (향후 구현 - 지금은 0)
+            unread_count = 0
+
+            result_list.append(
+                {
+                    "room_id": str(room.id),
+                    "name": room.name,
+                    "is_group": room.is_group,
+                    "participants": participants,
+                    "last_message": last_message,
+                    "unread_count": unread_count,
+                    "updated_at": room.updated_at.isoformat(),
+                }
+            )
+
+        return result_list, total
 
     async def get_room_member_count(self, room_id: UUID) -> int:
         """채팅방 멤버 수"""
@@ -194,3 +320,92 @@ class ChatService:
         messages = list(result.scalars().all())
         messages.reverse()
         return messages, total
+
+    async def get_or_create_one_to_one_room(
+        self, user_a_id: UUID, user_b_id: UUID
+    ) -> ChatRoom:
+        """
+        1:1 채팅방 생성 또는 기존 방 반환
+
+        같은 두 user_id 조합으로는 오직 하나의 room만 존재함을 보장.
+        이미 존재하면 기존 room_id 반환, 없으면 새로 생성.
+
+        Args:
+            user_a_id: 사용자 A (보통 현재 사용자)
+            user_b_id: 사용자 B (상대방)
+
+        Returns:
+            ChatRoom 객체
+        """
+        # 두 user를 정렬하여 일관성 유지
+        # (LEAST/GREATEST는 PostgreSQL 함수, SQLAlchemy에서는 min/max 사용)
+        user_ids = sorted([user_a_id, user_b_id])
+        user_1, user_2 = user_ids[0], user_ids[1]
+
+        # 기존 1:1 방 조회
+        # is_group=False 이고, 두 사용자가 모두 멤버인 경우
+        result = await self.db.execute(
+            select(ChatRoom)
+            .where(
+                and_(
+                    ChatRoom.is_group.is_(False),
+                    ChatRoom.is_deleted.is_(False),
+                    ChatRoom.id.in_(
+                        select(ChatRoomMember.room_id).where(
+                            and_(
+                                ChatRoomMember.user_id == user_1,
+                                ChatRoomMember.is_deleted.is_(False),
+                            )
+                        )
+                    ),
+                )
+            )
+        )
+
+        existing_rooms = list(result.scalars().all())
+        for room in existing_rooms:
+            # 이 room에 user_2도 멤버인지 확인
+            member_result = await self.db.execute(
+                select(ChatRoomMember.id).where(
+                    and_(
+                        ChatRoomMember.room_id == room.id,
+                        ChatRoomMember.user_id == user_2,
+                        ChatRoomMember.is_deleted.is_(False),
+                    )
+                )
+            )
+            if member_result.scalar_one_or_none():
+                # 기존 room 발견
+                return room
+
+        # 새로운 1:1 room 생성
+        room = ChatRoom(
+            name=f"1:1 Chat",  # UI에서 상대방 이름으로 표시 예정
+            is_group=False,
+            created_by=user_a_id,
+        )
+        self.db.add(room)
+        await self.db.flush()
+
+        # 두 사용자 모두 멤버로 추가
+        for user_id in [user_1, user_2]:
+            self.db.add(
+                ChatRoomMember(
+                    room_id=room.id,
+                    user_id=user_id,
+                    role="owner" if user_id == user_a_id else "member",
+                )
+            )
+
+        await self.db.commit()
+        await self.db.refresh(room)
+
+        await event_bus.emit(
+            ChatRoomCreatedEvent(
+                room_id=str(room.id),
+                created_by=str(user_a_id),
+                member_count=2,
+                is_group=False,
+            )
+        )
+        return room

@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # Firebase
     FIREBASE_PROJECT_ID: str = ""
     FIREBASE_JWKS_URI: str = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+    FCM_CREDENTIALS_PATH: Optional[str] = None
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""

@@ -383,6 +383,13 @@ class EventBus:
             self._subscribers[event_type] = []
         self._subscribers[event_type].append(handler)
 
+    def on(self, event_type: str):
+        """데코레이터: 이벤트 핸들러 등록"""
+        def decorator(func: Callable):
+            self.subscribe(event_type, func)
+            return func
+        return decorator
+
     async def emit(self, event: Event):
         """이벤트 발행 (Redis Pub/Sub + 로컬 핸들러)"""
         # Redis로 발행

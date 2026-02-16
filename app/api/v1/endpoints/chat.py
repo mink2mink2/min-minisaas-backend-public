@@ -35,25 +35,31 @@ async def list_rooms(
     _: str = Depends(verify_api_key),
     db: AsyncSession = Depends(get_db),
 ):
-    """내 채팅방 목록"""
+    """
+    내 채팅방 목록 (상대 정보 및 마지막 메시지 포함)
+
+    Response:
+    [
+        {
+            "room_id": "uuid",
+            "name": "상대방 이름 또는 그룹명",
+            "is_group": false,
+            "participants": [
+                { "user_id", "name", "picture", "username" }
+            ],
+            "last_message": {
+                "content": "마지막 메시지",
+                "sender_name": "발신자",
+                "created_at": "2026-02-16T10:00:00"
+            },
+            "unread_count": 0,
+            "updated_at": "2026-02-16T10:00:00"
+        }
+    ]
+    """
     user_id = UUID(auth.user_id)
     service = ChatService(db)
-    rooms, total = await service.list_rooms(user_id=user_id, page=page, limit=limit)
-
-    items = []
-    for room in rooms:
-        member_count = await service.get_room_member_count(room.id)
-        items.append(
-            ChatRoomResponse(
-                id=room.id,
-                name=room.name,
-                is_group=room.is_group,
-                created_by=room.created_by,
-                member_count=member_count,
-                created_at=room.created_at,
-                updated_at=room.updated_at,
-            )
-        )
+    items, total = await service.list_rooms_with_details(user_id=user_id, page=page, limit=limit)
 
     return PaginatedResponse.create(items, total, page, limit).__dict__
 
@@ -65,16 +71,32 @@ async def create_room(
     _: str = Depends(verify_api_key),
     db: AsyncSession = Depends(get_db),
 ):
-    """채팅방 생성"""
+    """
+    채팅방 생성
+
+    - 1:1 채팅 (is_group=False, member_ids=[peer_id]): 기존 room이 있으면 반환
+    - 그룹 채팅 (is_group=True): 항상 새로운 room 생성
+    """
     user_id = UUID(auth.user_id)
     service = ChatService(db)
 
-    room, member_count = await service.create_room(
-        creator_id=user_id,
-        name=data.name,
-        is_group=data.is_group,
-        member_ids=data.member_ids,
-    )
+    # 1:1 채팅은 중복 방지
+    if not data.is_group and len(data.member_ids) == 1:
+        peer_id = data.member_ids[0]
+        room = await service.get_or_create_one_to_one_room(
+            user_a_id=user_id,
+            user_b_id=peer_id,
+        )
+        member_count = 2
+    else:
+        # 그룹 채팅은 항상 새로 생성
+        room, member_count = await service.create_room(
+            creator_id=user_id,
+            name=data.name,
+            is_group=data.is_group,
+            member_ids=data.member_ids,
+        )
+
     return ChatRoomResponse(
         id=room.id,
         name=room.name,

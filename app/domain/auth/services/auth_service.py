@@ -168,3 +168,56 @@ class AuthService:
             return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
         except Exception:
             return None
+
+    async def search_users(
+        self, query: str, exclude_user_id: Optional[str] = None, limit: int = 10
+    ) -> list:
+        """
+        사용자 검색 (사용자명 또는 이메일)
+
+        Args:
+            query: 검색어 (최소 2글자)
+            exclude_user_id: 제외할 사용자 ID (보통 현재 사용자)
+            limit: 최대 결과 수
+
+        Returns:
+            User 리스트 (id, name, picture, username, email)
+        """
+        if len(query.strip()) < 2:
+            return []
+
+        query = query.strip().lower()
+
+        # 사용자명 또는 이메일로 검색
+        from sqlalchemy import or_, and_
+
+        conditions = [
+            User.is_active.is_(True),
+            or_(
+                User.username.ilike(f"%{query}%"),
+                User.email.ilike(f"%{query}%"),
+                User.name.ilike(f"%{query}%"),
+            ),
+        ]
+
+        # 자신 제외
+        if exclude_user_id:
+            conditions.append(User.id != exclude_user_id)
+
+        result = await self.db.execute(
+            select(User)
+            .where(and_(*conditions))
+            .limit(limit)
+        )
+
+        users = result.scalars().all()
+        return [
+            {
+                "id": str(user.id),
+                "name": user.name,
+                "picture": user.picture,
+                "username": user.username,
+                "email": user.email,
+            }
+            for user in users
+        ]
