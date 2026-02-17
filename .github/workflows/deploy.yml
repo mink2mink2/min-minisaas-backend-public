@@ -55,6 +55,7 @@ jobs:
 
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=$IMAGE_URL \
+            --project=${{ env.GCP_PROJECT_ID }} \
             --region=${{ env.GCP_REGION }} \
             --platform=managed \
             --allow-unauthenticated \
