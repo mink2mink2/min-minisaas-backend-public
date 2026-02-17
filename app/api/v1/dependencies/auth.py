@@ -29,13 +29,31 @@ async def verify_web_session(request: Request) -> AuthResult:
     Raises:
         HTTPException: 세션 검증 실패
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"🔍 === verify_web_session 시작 ===")
+    logger.info(f"🔍 Request URL: {request.url}")
+    logger.info(f"🔍 All cookies: {dict(request.cookies)}")
+    logger.info(f"🔍 Cookie header (raw): {request.headers.get('cookie')}")
+    logger.info(f"🔍 All headers: {dict(request.headers)}")
+
     session_id = request.cookies.get("session")
+    logger.info(f"🔍 session_id extracted: {session_id}")
+
     if not session_id:
+        logger.error("❌ No session cookie found!")
+        logger.error(f"❌ request.cookies keys: {list(request.cookies.keys())}")
         raise HTTPException(401, "No session cookie")
 
     session_data = await session_manager.validate_and_slide(session_id)
+    logger.info(f"🔍 session_data: {session_data}")
+
     if not session_data:
+        logger.error(f"❌ Session not found in Redis for session_id: {session_id}")
         raise HTTPException(401, "Session expired or invalid")
+
+    logger.info(f"✅ Session validated for user: {session_data['user_id']}")
 
     return AuthResult(
         user_id=session_data["user_id"],
@@ -145,13 +163,25 @@ async def verify_any_platform(
     Raises:
         HTTPException: 인증 검증 실패
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f"=== verify_any_platform 시작 ===")
+    logger.debug(f"X-Platform: {x_platform}")
+    logger.debug(f"Authorization header present: {authorization is not None}")
+    logger.debug(f"Request URL: {request.url}")
+
     if x_platform == "web":
+        logger.debug(f"Platform is 'web' - calling verify_web_session")
         return await verify_web_session(request)
     elif x_platform == "mobile":
+        logger.debug(f"Platform is 'mobile' - calling verify_firebase_jwt")
         return await verify_firebase_jwt(authorization=authorization or "", db=db)
     elif x_platform in ("desktop", "device"):
+        logger.debug(f"Platform is '{x_platform}' - calling verify_self_jwt")
         return await verify_self_jwt(authorization=authorization or "")
     else:
+        logger.error(f"Unknown platform: {x_platform}")
         raise HTTPException(400, f"Unknown platform: {x_platform}")
 
 

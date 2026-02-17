@@ -23,10 +23,19 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Session (Web)
+    # Session (Web) - 환경별 기본값 설정
     SESSION_TTL_MIN: int = 30
-    COOKIE_SECURE: bool = True
+    COOKIE_SECURE: Optional[bool] = None  # None이면 환경에 따라 자동 설정
     COOKIE_SAMESITE: str = "lax"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        # COOKIE_SECURE가 명시적으로 설정되지 않으면 환경에 따라 자동 설정
+        if self.COOKIE_SECURE is None:
+            self.COOKIE_SECURE = (self.ENVIRONMENT == "production")
+            # production: True (HTTPS 필수)
+            # development: False (HTTP 허용)
 
     # Desktop Auth
     DESKTOP_ACCESS_EXPIRE_MINUTES: int = 60

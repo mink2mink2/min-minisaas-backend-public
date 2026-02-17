@@ -1,5 +1,6 @@
 """공통 인증 엔드포인트 (플랫폼 무관)"""
-from fastapi import APIRouter, Depends, Request
+from typing import Optional
+from fastapi import APIRouter, Depends, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AuthResult, CSRFTokenManager, get_strategy
 from app.api.v1.dependencies.api_key import verify_api_key
@@ -74,7 +75,7 @@ async def refresh(
 
 @router.post(
     "/logout",
-    summary="로그아웃 (CSRF 토큰 필수)",
+    summary="로그아웃 (CSRF 토큰 권장, 선택적)",
     description="""
     - Web: 서버 세션 파괴 + JWT 무효화
     - Mobile: 클라이언트 토큰 삭제를 권장
@@ -82,9 +83,9 @@ async def refresh(
     - IoT: 디바이스 세션 삭제
 
     필수 헤더:
-    - X-API-Key, X-Platform, X-CSRF-Token
-    - Authorization: Bearer <token> (web 제외)
-    - Cookie: session=<id> (web 전용)
+    - X-API-Key, X-Platform
+    - Authorization: Bearer <token> 또는 Cookie: session=<id>
+    - X-CSRF-Token (권장하지만 선택적 - 있으면 검증)
     """,
 )
 async def logout(
@@ -93,33 +94,43 @@ async def logout(
     auth: AuthResult = Depends(verify_any_platform),
 ) -> dict:
     """
-    로그아웃 (CSRF 토큰 필수)
-
-    - Web: 서버 세션 파괴 + JWT 무효화
-    - Mobile: JWT 무효화 (클라이언트가 토큰 삭제)
-    - Desktop: Refresh Token 무효화
-    - IoT: 디바이스 세션 삭제
-
-    Headers:
-        X-CSRF-Token: CSRF 토큰 (GET /auth/me에서 획득)
+    로그아웃 (CSRF 토큰 권장, 선택적)
     """
-    # CSRF 토큰 검증
-    x_csrf_token = request.headers.get("X-CSRF-Token")
-    if not x_csrf_token:
-        from fastapi import HTTPException
-        raise HTTPException(403, "Missing X-CSRF-Token header")
+    import logging
+    logger = logging.getLogger(__name__)
 
-    is_valid = await CSRFTokenManager.consume(auth.user_id, auth.platform, x_csrf_token)
-    if not is_valid:
-        from fastapi import HTTPException
-        raise HTTPException(403, "Invalid or expired CSRF token")
+    logger.debug(f"=== logout 엔드포인트 시작 ===")
+    logger.debug(f"Platform: {auth.platform}")
+    logger.debug(f"User ID: {auth.user_id}")
+    logger.debug(f"All request headers: {dict(request.headers)}")
+    logger.debug(f"All request cookies: {request.cookies}")
+
+    # 인증된 사용자 정보
+    x_platform = auth.platform
+    auth_result = auth
+
+    # CSRF 토큰 검증 (선택적 - 있으면 검증, 없으면 경고만)
+    x_csrf_token = request.headers.get("X-CSRF-Token")
+    if x_csrf_token:
+        logger.debug(f"CSRF token found: {x_csrf_token[:20]}...")
+        is_valid = await CSRFTokenManager.consume(auth_result.user_id, x_platform, x_csrf_token)
+        if not is_valid:
+            logger.error(f"❌ Invalid CSRF token")
+            from fastapi import HTTPException
+            raise HTTPException(403, "Invalid or expired CSRF token")
+    else:
+        # CSRF 토큰이 없음 - 경고만 로깅하고 진행
+        logger.warning(f"Logout without CSRF token for user {auth_result.user_id} (platform: {x_platform})")
 
     # 로그아웃 처리
+    logger.debug(f"Calling strategy.logout for platform: {auth.platform}")
     strategy = get_strategy(auth.platform)
-    await strategy.logout(request, auth.user_id)
+    await strategy.logout(request, auth_result.user_id)
 
     # 모든 CSRF 토큰 무효화
-    await CSRFTokenManager.revoke_all(auth.user_id)
+    await CSRFTokenManager.revoke_all(auth_result.user_id)
+
+    logger.info(f"✅ Logout successful for user: {auth_result.user_id}")
 
     return {"success": True, "message": "로그아웃 완료"}
 
