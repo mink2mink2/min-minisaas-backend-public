@@ -20,7 +20,7 @@ app = FastAPI(title="min-minisaas", version="0.1.0")
 # 정규표현식으로 모든 localhost 포트 허용 (개발 환경)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://localhost:\d+|http://127\.0\.0\.1:\d+",
+    allow_origin_regex=r"http://localhost:\d+|http://127\.0\.0\.1:\d+|http://localhost:60488",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
