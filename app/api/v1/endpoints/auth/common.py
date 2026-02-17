@@ -74,15 +74,16 @@ async def refresh(
 
 @router.post(
     "/logout",
-    summary="로그아웃 (CSRF 토큰 필수)",
+    summary="로그아웃 (CSRF 토큰 권장, 선택적)",
     description="""
     - Web: 서버 세션 파괴 + JWT 무효화
     - Mobile: 클라이언트 토큰 삭제를 권장
     - Desktop: Refresh Token 무효화
     - IoT: 디바이스 세션 삭제
 
-    필수 헤더:
-    - X-API-Key, X-Platform, X-CSRF-Token
+    권장 헤더:
+    - X-API-Key, X-Platform
+    - X-CSRF-Token (권장하지만 선택적 - 있으면 검증)
     - Authorization: Bearer <token> (web 제외)
     - Cookie: session=<id> (web 전용)
     """,
@@ -93,7 +94,7 @@ async def logout(
     auth: AuthResult = Depends(verify_any_platform),
 ) -> dict:
     """
-    로그아웃 (CSRF 토큰 필수)
+    로그아웃 (CSRF 토큰 권장, 선택적)
 
     - Web: 서버 세션 파괴 + JWT 무효화
     - Mobile: JWT 무효화 (클라이언트가 토큰 삭제)
@@ -101,18 +102,21 @@ async def logout(
     - IoT: 디바이스 세션 삭제
 
     Headers:
-        X-CSRF-Token: CSRF 토큰 (GET /auth/me에서 획득)
-    """
-    # CSRF 토큰 검증
-    x_csrf_token = request.headers.get("X-CSRF-Token")
-    if not x_csrf_token:
-        from fastapi import HTTPException
-        raise HTTPException(403, "Missing X-CSRF-Token header")
+        X-CSRF-Token: CSRF 토큰 (권장하지만 선택적 - GET /auth/me에서 획득)
 
-    is_valid = await CSRFTokenManager.consume(auth.user_id, auth.platform, x_csrf_token)
-    if not is_valid:
-        from fastapi import HTTPException
-        raise HTTPException(403, "Invalid or expired CSRF token")
+    Note: 토큰이 있으면 검증하고, 없으면 경고만 로깅 후 진행 (best effort)
+    """
+    # CSRF 토큰 검증 (선택적 - 있으면 검증, 없으면 경고만)
+    x_csrf_token = request.headers.get("X-CSRF-Token")
+    if x_csrf_token:
+        is_valid = await CSRFTokenManager.consume(auth.user_id, auth.platform, x_csrf_token)
+        if not is_valid:
+            from fastapi import HTTPException
+            raise HTTPException(403, "Invalid or expired CSRF token")
+    else:
+        # CSRF 토큰이 없음 - 경고만 로깅하고 진행 (클라이언트가 로그아웃 중일 수 있음, 또는 토큰 만료)
+        import logging
+        logging.warning(f"Logout without CSRF token for user {auth.user_id} (platform: {auth.platform}) - token may be expired or client did not include it")
 
     # 로그아웃 처리
     strategy = get_strategy(auth.platform)
