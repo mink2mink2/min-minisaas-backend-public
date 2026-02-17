@@ -17,15 +17,30 @@ from app.domain.push.events import push_event_handlers  # noqa: F401
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
 # CORS - 맨 먼저 추가 (middleware는 역순으로 실행되므로 첫 번째가 마지막에 실행)
-# 정규표현식으로 모든 localhost 포트 허용 (개발 환경)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"http://localhost:\d+|http://127\.0\.0\.1:\d+|http://localhost:60488",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],  # 🍪 Set-Cookie 헤더를 클라이언트에 노출
-)
+cors_origins = settings.CORS_ORIGINS
+# 개발 환경에서는 localhost:* 패턴도 허용
+if settings.ENVIRONMENT == "development":
+    # 개발: localhost 모든 포트 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://localhost:\d+|http://127\.0\.0\.1:\d+",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+        expose_headers=["X-Total-Count", "X-Page-Count"],
+        max_age=600,
+    )
+else:
+    # 프로덕션: 명시적 도메인만 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+        expose_headers=["X-Total-Count", "X-Page-Count"],
+        max_age=600,
+    )
 
 # Register exception handler for unified auth errors
 app.add_exception_handler(AuthException, auth_exception_handler)

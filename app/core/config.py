@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_SECURE: bool = False
 
+    # CORS
+    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8080"]
+
     @property
     def REDIS_URL_WITH_AUTH(self) -> str:
         """REDIS_PASSWORD가 있고 URL에 인증정보가 없으면 자동 주입."""

@@ -1,5 +1,5 @@
 """Desktop 플랫폼 인증 엔드포인트"""
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_strategy
 from app.domain.auth.services.auth_service import AuthService
@@ -36,6 +36,9 @@ async def login_desktop(
         - code_verifier: PKCE code verifier
         - device_id: Optional device identifier
     """
+    # 🚫 TEMPORARILY DISABLED (2026-02-17)
+    raise HTTPException(status_code=503, detail="Desktop login temporarily disabled for maintenance")
+
     strategy = get_strategy("desktop")
 
     # 1. 인증 (OAuth2 PKCE → Google Token Exchange)

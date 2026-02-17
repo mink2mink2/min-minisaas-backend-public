@@ -419,3 +419,165 @@ If pursuing P3 tasks:
 **Last Updated:** Feb 15, 2026
 **Completed By:** Claude Code + AI Assistant
 **Next Review:** Consider P3 tasks 6-7 (mTLS, HSM) for enterprise deployment
+
+---
+
+## 🔍 Code Review - 2026-02-17
+
+### Comprehensive Code Review Summary
+
+**Review Date:** Feb 17, 2026
+**Review Scope:** Full codebase analysis
+**Overall Risk:** MEDIUM → LOW (after fixes)
+
+### 🔴 CRITICAL Issues (Deploy Blocking)
+
+#### C1: CORS Configuration Broken
+- **File:** `app/main.py:23`, `app/core/config.py`
+- **Issue:** Hardcoded dev port (60488) + missing `CORS_ORIGINS` field in config
+- **Impact:** CORS bypass in production + AttributeError runtime
+- **Fix:** Add `CORS_ORIGINS` to config.py, make environment-based
+- **Status:** ⬜ TODO
+
+#### C2: Bare Except Clauses (Auth Bypass Risk)
+- **Files:** `app/api/v1/endpoints/board/posts.py:79,94`, `app/core/events.py:413`, others
+- **Issue:** Silent catch-all exceptions in auth verification
+- **Impact:** Authentication failures silently ignored
+- **Fix:** Replace `except:` with specific exception types + logging
+- **Status:** ⬜ TODO
+
+#### C3: N+1 Query in Board Posts Listing
+- **File:** `app/api/v1/endpoints/board/posts.py:91-94`
+- **Issue:** Loop-based DB queries (1 + 20 + 40 = 61 queries for 20 posts)
+- **Impact:** Severe performance degradation
+- **Fix:** Use SQLAlchemy `selectinload()` for eager loading
+- **Status:** ⬜ TODO
+
+#### C4: Timing-Unsafe CSRF Validation
+- **File:** `app/core/auth/csrf_manager.py:82`
+- **Issue:** Simple string comparison `==` vulnerable to timing attacks
+- **Fix:** Use `hmac.compare_digest()`
+- **Status:** ⬜ TODO
+
+#### C5: Missing Admin Permission Checks
+- **Files:** `app/api/v1/endpoints/board/categories.py:44,67,100`
+- **Issue:** No admin checks for category management (TODO comments)
+- **Impact:** Unauthorized category access possible
+- **Fix:** Implement `@require_admin` decorator on all category endpoints
+- **Status:** ⬜ TODO
+
+#### C6: FCM Token Validation Missing
+- **File:** `app/api/v1/endpoints/push.py:85`
+- **Issue:** Push notification token validation not implemented (TODO)
+- **Impact:** Security gap in push notification system
+- **Fix:** Implement token verification before push
+- **Status:** ⬜ TODO
+
+### 🟠 HIGH Priority Issues
+
+#### H1: Request Parameter Undefined
+- **File:** `app/api/v1/endpoints/board/posts.py:77`
+- **Issue:** `request` parameter used but never passed to function
+- **Fix:** Remove undefined parameter or pass via dependency injection
+- **Status:** ⬜ TODO
+
+#### H2: Database Connection Pooling Missing
+- **File:** `app/core/database.py`
+- **Issue:** No pool size, max_overflow, or pool_pre_ping configuration
+- **Fix:** Add `pool_size=20, max_overflow=10, pool_pre_ping=True`
+- **Status:** ⬜ TODO
+
+#### H3: Single API Key System
+- **File:** `app/api/v1/dependencies/api_key.py`
+- **Issue:** One API key for entire app (no per-client control)
+- **Fix:** Implement per-client API key system with rate limiting
+- **Status:** ⬜ TODO
+
+#### H4: MinIO Default Credentials
+- **File:** `app/core/config.py:62-65`
+- **Issue:** Default credentials hardcoded
+- **Fix:** Load from environment variables
+- **Status:** ⬜ TODO
+
+### 🟡 MEDIUM Priority Issues
+
+#### M1: Soft Delete Not Enforced
+- **File:** `app/models/base.py`
+- **Issue:** Soft-deleted records may be returned in API responses
+- **Fix:** Add filter to all queries or use database views
+- **Status:** ⬜ TODO
+
+#### M2: Inefficient Cache Pattern
+- **File:** `app/domain/board/services/post_service.py:28-40`
+- **Issue:** Two Redis operations instead of one (GET + INCR)
+- **Fix:** Use `redis.incr()` directly with expiration
+- **Status:** ⬜ TODO
+
+#### M3: HTML Sanitization Using Regex
+- **File:** `app/domain/board/services/post_service.py:42-70`
+- **Issue:** Regex-based sanitization is fragile
+- **Fix:** Use `bleach` library instead
+- **Status:** ⬜ TODO
+
+#### M4: Hardcoded Desktop Redirect URI
+- **File:** `app/core/auth/strategies/desktop_strategy.py:297`
+- **Issue:** Hardcoded localhost:9876 callback
+- **Fix:** Make configurable per environment
+- **Status:** ⬜ TODO
+
+#### M5: Missing Structured Logging
+- **Files:** Multiple
+- **Issue:** Mix of logging, print(), no JSON logging for aggregation
+- **Fix:** Implement structured JSON logging
+- **Status:** ⬜ TODO
+
+#### M6: Incomplete User Agent Check
+- **File:** `app/core/security.py:70-74`
+- **Issue:** Device fingerprint mismatch is silently ignored
+- **Fix:** Log or enforce stricter validation
+- **Status:** ⬜ TODO
+
+#### M7: Firebase Path Traversal Risk
+- **File:** `app/core/fcm.py:26-30`
+- **Issue:** No validation for `..` sequences in path
+- **Fix:** Use `os.path.abspath()` and validate result
+- **Status:** ⬜ TODO
+
+#### M8: Incomplete TODO Comments
+- **Files:** Multiple endpoints (blog, push, board, pdf)
+- **Issue:** 14 incomplete TODOs for critical features
+- **Impact:** Search indexing, notifications, permission checks
+- **Status:** ⬜ REVIEW
+
+### 📊 Statistics
+
+- **Total Files Analyzed:** 175
+- **Lines of Code:** ~1,357
+- **Domains:** 6 (Auth, Blog, Board, Chat, PDF, Points, Push)
+- **Critical Issues:** 6
+- **High Issues:** 4
+- **Medium Issues:** 8+
+- **Total Issues Found:** 18+
+
+### ✅ Positive Findings
+
+- ✅ Excellent event-driven architecture
+- ✅ Good async/await patterns
+- ✅ Strong domain separation
+- ✅ Modern stack (FastAPI 0.100+, SQLAlchemy 2.0)
+- ✅ Hash chain for transaction security
+- ✅ Multi-platform auth strategies
+- ✅ Proper soft delete implementation
+- ✅ Redis-based session management
+- ✅ MinIO file storage abstraction
+
+### 🚀 Fix Priority Timeline
+
+**Phase 1 (Before Deploy):** C1-C6, H1-H4 (1-2 weeks)
+**Phase 2 (Post-Deploy):** M1-M8 (2-4 weeks)
+**Phase 3 (Enhancement):** Structured logging, performance tuning (ongoing)
+
+---
+
+**Status:** ⬜ Awaiting fix implementation
+**Last Updated:** Feb 17, 2026

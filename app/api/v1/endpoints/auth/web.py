@@ -1,5 +1,5 @@
 """Web 플랫폼 인증 엔드포인트"""
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import get_strategy
 from app.domain.auth.services.auth_service import AuthService
@@ -34,6 +34,9 @@ async def login_web(
     - 서버사이드 세션 생성 + HttpOnly Cookie 설정
     - 신규/기존 사용자 자동 생성/업데이트
     """
+    # 🚫 TEMPORARILY DISABLED (2026-02-17)
+    raise HTTPException(status_code=503, detail="Web login temporarily disabled for maintenance")
+
     import logging
     logger = logging.getLogger(__name__)
 
