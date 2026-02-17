@@ -16,6 +16,16 @@ from app.domain.push.events import push_event_handlers  # noqa: F401
 
 app = FastAPI(title="min-minisaas", version="0.1.0")
 
+# CORS - 맨 먼저 추가 (middleware는 역순으로 실행되므로 첫 번째가 마지막에 실행)
+# 정규표현식으로 모든 localhost 포트 허용 (개발 환경)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://localhost:\d+|http://127\.0\.0\.1:\d+",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Register exception handler for unified auth errors
 app.add_exception_handler(AuthException, auth_exception_handler)
 
@@ -45,15 +55,6 @@ async def startup():
             print("⚠ Firebase Cloud Messaging (FCM) initialization failed")
     else:
         print("⚠ Firebase Cloud Messaging (FCM) not configured")
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # 라우터
 app.include_router(api_router, prefix="/api/v1")
