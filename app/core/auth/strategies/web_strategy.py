@@ -95,14 +95,26 @@ class WebAuthStrategy(AuthStrategy):
         """
         JSONResponse + Set-Cookie (HttpOnly, Secure, SameSite=Lax)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         response = JSONResponse(response_data)
 
         # Set-Cookie 헤더 설정
         session_id = session_data.get("session_id")
         expires = session_data.get("expires")
 
+        logger.info(f"🍪 === build_response ===")
+        logger.info(f"🍪 session_id: {session_id}")
+        logger.info(f"🍪 expires: {expires}")
+
         # Cookie 만료 시간 계산 (세션 TTL의 2배)
         max_age = (expires - int(time.time())) * 2
+        logger.info(f"🍪 max_age: {max_age}")
+        logger.info(f"🍪 COOKIE_SECURE: {settings.COOKIE_SECURE}")
+        logger.info(f"🍪 COOKIE_SAMESITE: {settings.COOKIE_SAMESITE}")
+        logger.info(f"🍪 httponly: True")
+        logger.info(f"🍪 path: /")
 
         response.set_cookie(
             key="session",
@@ -113,6 +125,9 @@ class WebAuthStrategy(AuthStrategy):
             samesite=settings.COOKIE_SAMESITE,
             path="/",
         )
+
+        logger.info(f"✅ Set-Cookie header added to response")
+        logger.info(f"📤 Response headers: {dict(response.headers)}")
 
         return response
 

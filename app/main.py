@@ -24,6 +24,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # 🍪 Set-Cookie 헤더를 클라이언트에 노출
 )
 
 # Register exception handler for unified auth errors
@@ -31,6 +32,15 @@ app.add_exception_handler(AuthException, auth_exception_handler)
 
 @app.on_event("startup")
 async def startup():
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # 🔍 디버그: 설정 출력
+    logger.info(f"🌍 ENVIRONMENT: {settings.ENVIRONMENT}")
+    logger.info(f"🍪 COOKIE_SECURE: {settings.COOKIE_SECURE}")
+    logger.info(f"🍪 COOKIE_SAMESITE: {settings.COOKIE_SAMESITE}")
+    logger.info(f"🔐 SESSION_TTL_MIN: {settings.SESSION_TTL_MIN}")
+
     await cache.init()
     await event_bus.connect()
 

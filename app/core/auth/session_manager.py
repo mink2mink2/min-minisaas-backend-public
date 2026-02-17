@@ -26,6 +26,9 @@ class SessionManager:
         Returns:
             session_id
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         session_id = str(uuid.uuid4())
         now = int(time.time())
         expires_at = now + self.ttl_seconds
@@ -38,7 +41,14 @@ class SessionManager:
         }
 
         key = f"{self.SESSION_PREFIX}:{session_id}"
+        logger.info(f"📝 session_manager.create()")
+        logger.info(f"   user_id: {user_id}")
+        logger.info(f"   session_id: {session_id}")
+        logger.info(f"   ttl_seconds: {self.ttl_seconds}")
+        logger.info(f"   redis_key: {key}")
+
         await cache.set(key, session_data, ttl_seconds=self.ttl_seconds * 2)
+        logger.info(f"✅ Session stored in Redis")
 
         return session_id
 
@@ -67,10 +77,18 @@ class SessionManager:
         Returns:
             갱신된 세션 데이터 dict 또는 None
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         key = f"{self.SESSION_PREFIX}:{session_id}"
+        logger.debug(f"🔍 validate_and_slide called with session_id: {session_id}")
+        logger.debug(f"🔍 Looking up Redis key: {key}")
+
         session_data = await cache.get(key)
+        logger.debug(f"🔍 Session data from cache: {session_data}")
 
         if not session_data:
+            logger.error(f"❌ Session not found in cache for key: {key}")
             return None
 
         # 슬라이딩 윈도우: 현재 시간 기준으로 TTL 연장
@@ -84,6 +102,7 @@ class SessionManager:
             }
         )
 
+        logger.debug(f"✅ Session updated - new expires: {expires_at}")
         await cache.set(key, session_data, ttl_seconds=self.ttl_seconds * 2)
 
         return session_data

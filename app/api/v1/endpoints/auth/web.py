@@ -34,10 +34,16 @@ async def login_web(
     - 서버사이드 세션 생성 + HttpOnly Cookie 설정
     - 신규/기존 사용자 자동 생성/업데이트
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f"=== login_web 시작 ===")
+
     strategy = get_strategy("web")
 
     # 1. 인증 (Firebase JWT 검증)
     auth_result = await strategy.authenticate(request)
+    logger.debug(f"✅ Firebase JWT authenticated, user_id: {auth_result.user_id}")
 
     # 2. 비즈니스 로직 (유저 조회/생성 - 공통)
     service = AuthService(db)
@@ -47,6 +53,7 @@ async def login_web(
         name=auth_result.name,
         picture=auth_result.picture,
     )
+    logger.debug(f"✅ User found/created: {user.id}, is_new: {is_new}")
 
     # Update auth_result.user_id to DB user UUID (not Firebase UID)
     auth_result.user_id = str(user.id)
@@ -54,6 +61,7 @@ async def login_web(
     # 3. 세션 생성 (플랫폼별) - Request를 metadata에 포함
     auth_result.metadata["request"] = request
     session_data = await strategy.create_session(auth_result)
+    logger.debug(f"✅ Session created: {session_data.get('session_id')}")
 
     # 4. 응답 생성 (플랫폼별)
     response_data = {
@@ -63,4 +71,7 @@ async def login_web(
         "is_new_user": is_new,
         "expires": session_data.get("expires"),
     }
-    return await strategy.build_response(response_data, session_data)
+    logger.debug(f"✅ Calling build_response with session_data")
+    response = await strategy.build_response(response_data, session_data)
+    logger.debug(f"✅ Response built, Set-Cookie header should be set")
+    return response
