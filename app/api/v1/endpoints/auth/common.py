@@ -113,6 +113,7 @@ async def logout(
         logging.warning(f"Logout without CSRF token for user {auth_result.user_id} (platform: {x_platform})")
 
     # 로그아웃 처리
+    strategy = get_strategy(auth.platform)
     await strategy.logout(request, auth_result.user_id)
 
     # 모든 CSRF 토큰 무효화
