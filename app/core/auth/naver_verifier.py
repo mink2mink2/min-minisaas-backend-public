@@ -1,7 +1,7 @@
 """네이버 토큰 검증 및 사용자 정보 조회"""
 import httpx
 from typing import Dict, Any
-from fastapi import HTTPException
+from app.core.exceptions import AuthException
 from app.core.config import settings
 
 
@@ -43,10 +43,10 @@ class NaverVerifier:
                 "raw_data": user_info,  # 원본 데이터 저장 (메타데이터)
             }
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Naver verification error: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def _get_user_info(self, naver_access_token: str) -> Dict[str, Any]:
         """
@@ -72,9 +72,9 @@ class NaverVerifier:
                 )
 
                 if response.status_code == 401:
-                    raise HTTPException(401, "Naver token expired or invalid")
+                    raise AuthException("INVALID_TOKEN", 401)
                 elif response.status_code == 403:
-                    raise HTTPException(403, "Naver API access forbidden")
+                    raise AuthException("INVALID_TOKEN", 401)
 
                 response.raise_for_status()
                 
@@ -82,16 +82,16 @@ class NaverVerifier:
                 data = response.json()
                 
                 if data.get("resultcode") != "00":
-                    raise HTTPException(401, f"Naver API error: {data.get('message')}")
+                    raise AuthException("AUTHENTICATION_FAILED", 401)
 
                 return data.get("response", {})
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(401, "Naver token invalid or expired")
-            raise HTTPException(401, f"Naver API failed: {e.response.text}")
+                raise AuthException("INVALID_TOKEN", 401)
+            raise AuthException("AUTHENTICATION_FAILED", 401)
         except httpx.RequestError as e:
-            raise HTTPException(500, f"Naver API connection error: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
 
 naver_verifier = NaverVerifier()

@@ -6,6 +6,8 @@ from app.core.auth.strategies.web_strategy import WebAuthStrategy
 from app.core.auth.strategies.mobile_strategy import MobileAuthStrategy
 from app.core.auth.strategies.desktop_strategy import DesktopAuthStrategy
 from app.core.auth.strategies.device_strategy import DeviceAuthStrategy
+from app.core.auth.strategies.kakao_strategy import KakaoOAuthStrategy
+from app.core.auth.strategies.naver_strategy import NaverOAuthStrategy
 
 
 _strategies: dict[str, AuthStrategy] = {
@@ -13,6 +15,8 @@ _strategies: dict[str, AuthStrategy] = {
     "mobile": MobileAuthStrategy(),
     "desktop": DesktopAuthStrategy(),
     "device": DeviceAuthStrategy(),
+    "kakao": KakaoOAuthStrategy(),
+    "naver": NaverOAuthStrategy(),
 }
 
 

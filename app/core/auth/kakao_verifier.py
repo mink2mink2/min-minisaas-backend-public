@@ -1,7 +1,7 @@
 """Kakao 토큰 검증 및 사용자 정보 조회"""
 import httpx
 from typing import Dict, Any
-from fastapi import HTTPException
+from app.core.exceptions import AuthException
 from app.core.config import settings
 
 
@@ -29,7 +29,7 @@ class KakaoVerifier:
             }
 
         Raises:
-            HTTPException: 검증 실패 시
+            AuthException: 검증 실패 시
         """
         try:
             # 1. 토큰 유효성 검증
@@ -46,10 +46,10 @@ class KakaoVerifier:
                 "raw_data": user_info,  # 원본 데이터 저장 (메타데이터)
             }
 
-        except HTTPException:
+        except AuthException:
             raise
         except Exception as e:
-            raise HTTPException(401, f"Kakao verification error: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def _verify_token(self, kakao_access_token: str) -> Dict[str, Any]:
         """
@@ -69,19 +69,19 @@ class KakaoVerifier:
                 response = await client.get(self.token_info_url, headers=headers, timeout=10)
 
                 if response.status_code == 401:
-                    raise HTTPException(401, "Kakao token expired or invalid")
+                    raise AuthException("INVALID_TOKEN", 401)
                 elif response.status_code == 403:
-                    raise HTTPException(403, "Kakao token verification forbidden")
+                    raise AuthException("INVALID_TOKEN", 401)
 
                 response.raise_for_status()
                 return response.json()
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(401, "Kakao token invalid or expired")
-            raise HTTPException(401, f"Kakao token verification failed: {e.response.text}")
+                raise AuthException("INVALID_TOKEN", 401)
+            raise AuthException("AUTHENTICATION_FAILED", 401)
         except httpx.RequestError as e:
-            raise HTTPException(500, f"Kakao API connection error: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
     async def _get_user_info(self, kakao_access_token: str) -> Dict[str, Any]:
         """
@@ -109,17 +109,17 @@ class KakaoVerifier:
                 )
 
                 if response.status_code == 401:
-                    raise HTTPException(401, "Kakao token expired or invalid")
+                    raise AuthException("INVALID_TOKEN", 401)
 
                 response.raise_for_status()
                 return response.json()
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise HTTPException(401, "Kakao user info fetch failed: token invalid")
-            raise HTTPException(401, f"Kakao API error: {e.response.text}")
+                raise AuthException("INVALID_TOKEN", 401)
+            raise AuthException("AUTHENTICATION_FAILED", 401)
         except httpx.RequestError as e:
-            raise HTTPException(500, f"Kakao API connection error: {str(e)}")
+            raise AuthException("AUTHENTICATION_FAILED", 401)
 
 
 kakao_verifier = KakaoVerifier()
