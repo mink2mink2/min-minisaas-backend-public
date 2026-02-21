@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # Kakao OAuth
+    KAKAO_REST_API_KEY: str = ""
+
+    # Naver OAuth
+    NAVER_CLIENT_ID: str = ""
+    NAVER_CLIENT_SECRET: str = ""
+
     # Slack Monitoring
     SLACK_WEBHOOK_URL: Optional[str] = None
     SECURITY_ALERT_THRESHOLD: str = "LOW"  # LOW, MEDIUM, HIGH
