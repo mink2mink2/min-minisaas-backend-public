@@ -14,7 +14,18 @@ from app.domain.points.services.points_event_handlers import register_points_eve
 from app.domain.blog.events import blog_event_handlers  # noqa: F401
 from app.domain.push.events import push_event_handlers  # noqa: F401
 
-app = FastAPI(title="min-minisaas", version="0.1.0")
+# 운영 환경에서는 API 문서 비활성화 (보안)
+docs_url = "/docs" if settings.ENVIRONMENT == "development" else None
+redoc_url = "/redoc" if settings.ENVIRONMENT == "development" else None
+openapi_url = "/openapi.json" if settings.ENVIRONMENT == "development" else None
+
+app = FastAPI(
+    title="min-minisaas",
+    version="0.1.0",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
+)
 
 # CORS - 맨 먼저 추가 (middleware는 역순으로 실행되므로 첫 번째가 마지막에 실행)
 cors_origins = settings.CORS_ORIGINS
