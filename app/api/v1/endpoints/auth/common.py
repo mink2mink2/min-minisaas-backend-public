@@ -99,11 +99,11 @@ async def logout(
     import logging
     logger = logging.getLogger(__name__)
 
-    logger.debug(f"=== logout 엔드포인트 시작 ===")
+    logger.debug("=== logout 엔드포인트 시작 ===")
     logger.debug(f"Platform: {auth.platform}")
     logger.debug(f"User ID: {auth.user_id}")
-    logger.debug(f"All request headers: {dict(request.headers)}")
-    logger.debug(f"All request cookies: {request.cookies}")
+    logger.debug(f"Request header keys: {list(request.headers.keys())}")
+    logger.debug(f"Request cookie keys: {list(request.cookies.keys())}")
 
     # 인증된 사용자 정보
     x_platform = auth.platform
@@ -112,7 +112,7 @@ async def logout(
     # CSRF 토큰 검증 (선택적 - 있으면 검증, 없으면 경고만)
     x_csrf_token = request.headers.get("X-CSRF-Token")
     if x_csrf_token:
-        logger.debug(f"CSRF token found: {x_csrf_token[:20]}...")
+        logger.debug("CSRF token found (redacted)")
         is_valid = await CSRFTokenManager.consume(auth_result.user_id, x_platform, x_csrf_token)
         if not is_valid:
             logger.error(f"❌ Invalid CSRF token")

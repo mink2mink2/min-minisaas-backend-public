@@ -32,14 +32,13 @@ async def verify_web_session(request: Request) -> AuthResult:
     import logging
     logger = logging.getLogger(__name__)
 
-    logger.info(f"🔍 === verify_web_session 시작 ===")
+    logger.info("🔍 === verify_web_session 시작 ===")
     logger.info(f"🔍 Request URL: {request.url}")
-    logger.info(f"🔍 All cookies: {dict(request.cookies)}")
-    logger.info(f"🔍 Cookie header (raw): {request.headers.get('cookie')}")
-    logger.info(f"🔍 All headers: {dict(request.headers)}")
+    logger.info(f"🔍 Cookie keys: {list(request.cookies.keys())}")
+    logger.info(f"🔍 Header keys: {list(request.headers.keys())}")
 
     session_id = request.cookies.get("session")
-    logger.info(f"🔍 session_id extracted: {session_id}")
+    logger.info(f"🔍 session cookie present: {session_id is not None}")
 
     if not session_id:
         logger.error("❌ No session cookie found!")
@@ -47,7 +46,7 @@ async def verify_web_session(request: Request) -> AuthResult:
         raise HTTPException(401, "No session cookie")
 
     session_data = await session_manager.validate_and_slide(session_id)
-    logger.info(f"🔍 session_data: {session_data}")
+    logger.info(f"🔍 session_data found: {session_data is not None}")
 
     if not session_data:
         logger.error(f"❌ Session not found in Redis for session_id: {session_id}")
