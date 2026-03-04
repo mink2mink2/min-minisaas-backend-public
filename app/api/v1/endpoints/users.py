@@ -4,6 +4,7 @@ Profile management, settings, search
 """
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.api_key import verify_api_key
@@ -11,6 +12,8 @@ from app.api.v1.dependencies.auth import AuthResult, verify_any_platform
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.domain.auth.services.auth_service import AuthService
+from app.domain.auth.models.user import User
+from app.domain.auth.schemas.user import UserResponse, UserUpdate
 
 router = APIRouter()
 
@@ -43,17 +46,63 @@ async def search_users(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/me")
-async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
-    """Get current user profile"""
-    return {"user_id": current_user["id"]}
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_profile(
+    auth: AuthResult = Depends(verify_any_platform),
+    _: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """현재 사용자 프로필 조회"""
+    result = await db.execute(select(User).where(User.id == UUID(auth.user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user
 
 
-@router.put("/me")
-async def update_current_user_profile(current_user: dict = Depends(get_current_user)):
-    """Update current user profile"""
-    # TODO: Update user profile
-    return {"message": "Profile updated"}
+@router.put("/me", response_model=UserResponse)
+async def update_current_user_profile(
+    data: UserUpdate,
+    auth: AuthResult = Depends(verify_any_platform),
+    _: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    현재 사용자 프로필 업데이트
+
+    - nickname: 게시글/댓글에 표시될 이름
+    - name: 실명
+    - picture: 프로필 사진 URL
+    """
+    user_id = UUID(auth.user_id)
+
+    # 업데이트할 필드만 준비
+    update_data = {}
+    if data.nickname is not None:
+        update_data["nickname"] = data.nickname
+    if data.name is not None:
+        update_data["name"] = data.name
+    if data.picture is not None:
+        update_data["picture"] = data.picture
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    # 업데이트 실행
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(**update_data)
+    )
+    await db.commit()
+
+    # 업데이트된 사용자 정보 반환
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    return user
 
 
 @router.get("/{user_id}")

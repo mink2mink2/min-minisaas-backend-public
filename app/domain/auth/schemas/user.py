@@ -33,12 +33,21 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UserUpdate(BaseModel):
+    """사용자 프로필 업데이트 요청"""
+
+    nickname: Optional[str] = Field(None, min_length=1, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    picture: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     """사용자 정보 응답"""
 
     id: UUID
     email: str
     name: Optional[str] = None
+    nickname: Optional[str] = None
     picture: Optional[str] = None
     points: int = 0
     is_active: bool = True

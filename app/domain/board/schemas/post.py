@@ -9,6 +9,7 @@ class AuthorBrief(BaseModel):
     """작성자 요약 정보"""
     id: UUID
     name: Optional[str] = None
+    nickname: Optional[str] = None
     picture: Optional[str] = None
     username: Optional[str] = None
 

@@ -16,6 +16,7 @@ class User(BaseModel):
 
     # 프로필
     name = Column(String(100), nullable=True)
+    nickname = Column(String(50), nullable=True)  # 게시글/댓글에 표시될 이름
     picture = Column(Text, nullable=True)
     username = Column(String(50), unique=True, nullable=True)
 

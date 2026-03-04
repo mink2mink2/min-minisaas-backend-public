@@ -54,6 +54,7 @@ async def _get_author_brief(user_id: UUID, db: AsyncSession) -> AuthorBrief:
     return AuthorBrief(
         id=user.id,
         name=user.name,
+        nickname=user.nickname,
         picture=user.picture,
         username=user.username,
     )
