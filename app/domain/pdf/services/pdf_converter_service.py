@@ -135,7 +135,7 @@ class PDFConverterService:
             # CSV 저장
             try:
                 combined_df = pd.concat(tables_df, ignore_index=True)
-                combined_df.to_csv(output_path, index=False, encoding="utf-8")
+                combined_df.to_csv(output_path, index=False, encoding="utf-8-sig")
             except Exception as e:
                 raise PDFConverterError(f"CSV 저장 실패: {e}")
 

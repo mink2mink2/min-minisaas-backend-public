@@ -36,6 +36,15 @@
 | T8-E | 도메인/SSL 설정 | HTTPS 인증서 |
 | T8-F | 모니터링 설정 | Cloud Monitoring, 알림 |
 
+### P1-PDF — PDF Helper 후속 작업
+
+| ID | 태스크 | 설명 | 우선순위 |
+|----|--------|------|---------|
+| PDF-01 | files.py 비즈니스 로직 분리 | 라우터에 있는 MinIO 업로드/검증 로직을 PDFFileService로 이동 (README 금지 패턴) | 높 |
+| PDF-02 | FIREBASE_PROJECT_ID 주입 | .env에 실제 Firebase 프로젝트 ID 설정 (운영 전 필수) | 🔴 긴급 |
+| PDF-03 | PDF 이벤트 핸들러 연결 검증 | coroutine warning 재확인 및 이벤트 핸들러 정상 동작 테스트 | 중 |
+| PDF-04 | PDF 단위 테스트 작성 | pdf_converter_service, pdf_file_service 테스트 | 중 |
+
 ### P3 — 기술 부채
 
 | ID | 태스크 | 설명 | 우선순위 |

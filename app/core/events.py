@@ -400,16 +400,13 @@ class EventBus:
                 pass
 
         # 로컬 핸들러 실행 (비동기)
+        import inspect
         handlers = self._subscribers.get(event.event_type, [])
         for handler in handlers:
             try:
-                if hasattr(handler, '__call__'):
-                    # 핸들러가 async 함수인 경우
-                    import asyncio
-                    if asyncio.iscoroutinefunction(handler):
-                        asyncio.create_task(handler(event))
-                    else:
-                        handler(event)
+                result = handler(event)
+                if inspect.isawaitable(result):
+                    asyncio.create_task(result)
             except Exception:
                 pass
 

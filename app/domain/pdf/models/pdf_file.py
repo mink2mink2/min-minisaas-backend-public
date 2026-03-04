@@ -80,14 +80,14 @@ class PDFFile(BaseModel):
     )
 
     file_type: Mapped[FileType] = mapped_column(
-        SAEnum(FileType),
+        SAEnum(FileType, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         default=FileType.PDF,
         nullable=False,
         comment="파일 타입",
     )
 
     status: Mapped[FileStatus] = mapped_column(
-        SAEnum(FileStatus),
+        SAEnum(FileStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         default=FileStatus.UPLOADING,
         nullable=False,
         comment="파일 상태",

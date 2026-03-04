@@ -2,7 +2,9 @@
 import logging
 import asyncio
 from typing import Optional
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.v1.dependencies.auth import verify_any_platform
@@ -10,6 +12,7 @@ from app.domain.auth.models import User
 from app.domain.pdf.models import FileStatus
 from app.domain.pdf.schemas import PDFConversionRequest, PDFConversionResponse
 from app.domain.pdf.services import PDFFileService, PDFConverterService
+from app.domain.points.services.point_service import PointService, InsufficientPointsError
 from app.infrastructure.minio_client import MinIOClient, MinIOClientError
 from app.core.events import event_bus
 import tempfile
@@ -18,6 +21,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["pdf"])
+
+CONVERSION_COST = 10  # 포인트
 
 # MinIO 클라이언트
 minio = None
@@ -130,8 +135,26 @@ async def convert_pdf_background(
         # 임시 출력 파일 삭제
         Path(output_path).unlink(missing_ok=True)
 
+        # 포인트 차감 (변환 완료 후)
+        conversion_cost = CONVERSION_COST
+        try:
+            point_service = PointService(db)
+            await point_service.consume(
+                user_id=pdf_file.user_id,
+                amount=conversion_cost,
+                description=f"PDF 변환: {pdf_file.original_filename}",
+                idempotency_key=f"pdf_convert_{file_id}",
+            )
+        except InsufficientPointsError:
+            logger.error(f"❌ 포인트 부족으로 차감 실패: {file_id}")
+            # 변환 성공했지만 포인트 차감 실패 - 상태는 PROCESSED로 업데이트하되, conversion_cost=0으로 설정
+            conversion_cost = 0
+        except Exception as e:
+            logger.error(f"❌ 포인트 차감 중 오류: {e}")
+            # 포인트 차감 실패해도 변환 결과는 유지
+            conversion_cost = 0
+
         # 상태 업데이트: PROCESSED + 결과 저장
-        conversion_cost = 10  # 포인트
         await pdf_service.update_conversion_status(
             file_id=file_id,
             status=FileStatus.PROCESSED,
@@ -195,7 +218,7 @@ async def request_pdf_conversion(
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
     # 권한 확인
-    if pdf_file.user_id != current_user.id:
+    if str(pdf_file.user_id) != str(current_user.user_id):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     # 상태 확인
@@ -209,6 +232,15 @@ async def request_pdf_conversion(
         raise HTTPException(
             status_code=409,
             detail="이미 변환이 완료되었습니다.",
+        )
+
+    # 포인트 잔액 확인
+    point_service = PointService(db)
+    balance = await point_service.get_balance(current_user.user_id)
+    if balance < CONVERSION_COST:
+        raise HTTPException(
+            status_code=402,
+            detail=f"포인트가 부족합니다. 필요: {CONVERSION_COST}, 잔액: {balance}",
         )
 
     # 백그라운드 작업 추가
@@ -252,7 +284,7 @@ async def get_conversion_status(
     if not pdf_file:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
-    if pdf_file.user_id != current_user.id:
+    if str(pdf_file.user_id) != str(current_user.user_id):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     # 상태 메시지
@@ -275,4 +307,77 @@ async def get_conversion_status(
         ),
         created_at=pdf_file.created_at,
         processed_at=pdf_file.processed_at,
+    )
+
+
+@router.get("/{file_id}/download")
+async def download_converted_csv(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_any_platform),
+):
+    """변환된 CSV 파일 다운로드 (스트리밍)
+
+    Args:
+        file_id: 파일 ID
+        db: 데이터베이스 세션
+        current_user: 인증된 사용자
+
+    Returns:
+        StreamingResponse (CSV 파일)
+
+    Raises:
+        404: 파일을 찾을 수 없음
+        403: 접근 권한 없음
+        409: 변환이 완료되지 않음
+        503: MinIO 저장소 사용 불가
+    """
+    pdf_service = PDFFileService(db)
+    pdf_file = await pdf_service.get_pdf_file(file_id)
+
+    if not pdf_file:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+    # 권한 확인
+    if str(pdf_file.user_id) != str(current_user.user_id):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    # 상태 확인
+    if pdf_file.status != FileStatus.PROCESSED or not pdf_file.output_path:
+        raise HTTPException(
+            status_code=409,
+            detail="변환이 완료되지 않았습니다.",
+        )
+
+    # MinIO에서 다운로드
+    if not minio:
+        raise HTTPException(
+            status_code=503,
+            detail="파일 저장소를 사용할 수 없습니다.",
+        )
+
+    try:
+        file_data = await minio.download_file(
+            bucket_name=pdf_file.minio_bucket,
+            object_name=pdf_file.output_path,
+        )
+    except MinIOClientError as e:
+        logger.error(f"❌ MinIO 다운로드 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="파일 다운로드에 실패했습니다.",
+        )
+
+    # 파일명 설정 (원본 파일명에서 확장자를 .csv로 변경)
+    filename = pdf_file.original_filename.rsplit(".", 1)[0] + ".csv"
+    encoded_filename = quote(filename)
+
+    logger.info(f"📥 CSV 다운로드: {file_id} -> {filename}")
+
+    return StreamingResponse(
+        file_data,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
     )

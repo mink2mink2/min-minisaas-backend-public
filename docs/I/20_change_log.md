@@ -6,6 +6,79 @@
 
 ---
 
+## 2026-03-04 (PDF Helper 버그픽스 세션)
+
+### fix: PDF 업로드 스트림 소진 문제 수정
+- `files.py`: `file.read()` 후 스트림 소진 → `BytesIO(content)`로 재래핑
+- `from io import BytesIO` import를 함수 내부 → 파일 상단으로 이동 (모듈성 준수)
+
+### fix: UUID 타입 비교 오류 수정 (403 Forbidden)
+- `files.py`, `convert.py`: `pdf_file.user_id != current_user.user_id` → `str()` 변환 비교
+- 원인: SQLAlchemy UUID 객체 vs AuthResult str 타입 불일치
+
+### fix: SQLAlchemy ENUM 타입 불일치 수정
+- `pdf_file.py`: `SAEnum(FileType)` → `SAEnum(FileType, native_enum=False, values_callable=...)`
+- 원인: 마이그레이션은 String 컬럼, 모델은 PostgreSQL ENUM 타입 요구 불일치
+
+### fix: EventBus coroutine never awaited 수정
+- `events.py`: `asyncio.iscoroutinefunction()` 체크 방식 → `inspect.isawaitable(result)` 방식으로 변경
+- 원인: bound method에서 `iscoroutinefunction()`이 False 반환하는 경우 발생
+
+### fix: CSV 한글 깨짐 수정
+- `pdf_converter_service.py`: `encoding="utf-8"` → `encoding="utf-8-sig"` (BOM 추가)
+
+### 4가지 원칙 검사 결과 (2026-03-04)
+- **모듈성** ✅ BytesIO import 수정 완료 / ⚠️ 기술부채: files.py 라우터에 비즈니스 로직 혼재
+- **독립성** ✅ 도메인 간 직접 의존 없음
+- **이벤트 드리븐** ⚠️ events.py 수정 완료 / 기술부채: 일부 이벤트 미연결
+- **보안** 🔴 운영 전 필수: `FIREBASE_PROJECT_ID` 실제 값 주입 필요
+
+---
+
+## 2026-03-04
+
+### 🔄 발견: user.profile_updated API 실제 구현 상태 재분류
+- **발견**: `PUT /users/me` 엔드포인트가 이미 구현되어 있음 (users.py:65-105)
+  - nickname, name, picture 업데이트 기능 완전 작동
+- **재분류**: Task 7 미구현 목록에서 "이벤트 발행 미구현"으로 상세화
+  - API 자체는 ✅ 구현됨
+  - ⚠️ EventBus 퍼블리시만 `user.profile_updated` 미구현
+- **영향**: Task 7 구현률 재계산 필요 (25→26 이벤트 포함 재검토)
+
+### docs: 이벤트 드리븐 아키텍처 검증 및 문서화
+- **전체 코드베이스 검토** — 모든 domain services & endpoints 분석
+- **이벤트 발행 현황 매핑** — 25/53 이벤트만 구현됨 (47% 구현율)
+- **미구현 이벤트 목록 작성**:
+  - P0: user.profile_updated (users.py:65-99 미발행)
+  - P1: blog.post.updated/deleted (blog_service.py 미발행)
+  - P2: blog.author.subscribed/unsubscribed (미발행)
+  - P2: board.post.bookmarked (불일치: likes는 발행)
+- **RDIV 문서 갱신**:
+  - `I/10_implementation_plan.md` — Task 7 추가 (이벤트 검증)
+  - `I/20_change_log.md` — 변경 기록 (이 항목)
+  - `/min-minisaas/doc/EVENT_DRIVEN.md` — 이벤트 카탈로그 업데이트 (메인 레포)
+
+### 이벤트 구현 현황
+
+**완전 구현 (100%)**
+- ✅ Board Posts & Comments (모든 CRUD + reactions)
+- ✅ Chat (room creation, message sending)
+- ✅ Points (charge, consume, refund)
+- ✅ PDF (file operations)
+
+**부분 구현 (<50%)**
+- 🟡 Chat: room/message 일부만
+- 🟡 Blog: create only
+- 🟡 User: auth events만
+
+**미구현 (0%)**
+- ❌ Blog updates/deletes/subscriptions
+- ❌ User profile updates
+- ❌ Board bookmarks (inconsistent)
+- ❌ Notifications
+
+---
+
 ## 2026-03-03
 
 ### docs: RDIV 문서 구조 생성

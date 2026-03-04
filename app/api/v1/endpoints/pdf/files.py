@@ -1,12 +1,14 @@
 """PDF 파일 관리 엔드포인트 (업로드, 조회, 삭제)"""
 import logging
 import uuid
+from io import BytesIO
 from typing import List
 from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.v1.dependencies.auth import verify_any_platform
 from app.domain.auth.models import User
+from app.domain.pdf.models import FileStatus
 from app.domain.pdf.schemas import PDFFileCreate, PDFFileResponse
 from app.domain.pdf.services import PDFFileService
 from app.infrastructure.minio_client import MinIOClient, MinIOClientError
@@ -85,7 +87,7 @@ async def upload_pdf(
 
         logger.info(
             f"📤 파일 업로드 시작: {file.filename} ({file_size} bytes) "
-            f"- User: {current_user.id}"
+            f"- User: {current_user.user_id}"
         )
 
         # MinIO에 저장
@@ -98,14 +100,18 @@ async def upload_pdf(
         # MinIO 경로 생성
         minio_bucket = "pdf-files"
         file_id = str(uuid.uuid4())
-        minio_path = f"{current_user.id}/{file_id}/{file.filename}"
+        minio_path = f"{current_user.user_id}/{file_id}/{file.filename}"
 
         try:
             await minio.ensure_bucket(minio_bucket)
+
+            # BytesIO로 변환 (파일 스트림이 이미 읽혀있으므로)
+            file_stream = BytesIO(content)
+
             await minio.upload_file(
                 bucket_name=minio_bucket,
                 object_name=minio_path,
-                file_data=file.file,
+                file_data=file_stream,
                 file_size=file_size,
                 content_type="application/pdf",
             )
@@ -125,12 +131,19 @@ async def upload_pdf(
         )
 
         pdf_file = await pdf_service.create_pdf_file(
-            user_id=current_user.id,
+            user_id=current_user.user_id,
             data=pdf_file_data,
             minio_bucket=minio_bucket,
             minio_path=minio_path,
         )
 
+        await db.commit()
+
+        # 상태 전환: UPLOADING → UPLOADED
+        await pdf_service.update_conversion_status(
+            file_id=pdf_file.file_id,
+            status=FileStatus.UPLOADED,
+        )
         await db.commit()
 
         logger.info(f"✅ 파일 업로드 완료: {file_id}")
@@ -143,6 +156,34 @@ async def upload_pdf(
         logger.error(f"❌ 파일 업로드 중 오류: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail="파일 업로드에 실패했습니다.")
+
+
+@router.get("/user/files", response_model=List[PDFFileResponse])
+async def get_user_pdf_files(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_any_platform),
+):
+    """사용자의 PDF 파일 목록 조회
+
+    Args:
+        skip: 건너뛸 개수
+        limit: 조회할 개수
+        db: 데이터베이스 세션
+        current_user: 인증된 사용자
+
+    Returns:
+        PDFFileResponse 목록
+    """
+    pdf_service = PDFFileService(db)
+    files = await pdf_service.get_user_pdf_files(
+        user_id=current_user.user_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    return [PDFFileResponse.from_orm(f) for f in files]
 
 
 @router.get("/{file_id}", response_model=PDFFileResponse)
@@ -172,38 +213,10 @@ async def get_pdf_file(
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
     # 권한 확인 (본인 파일만)
-    if pdf_file.user_id != current_user.id:
+    if str(pdf_file.user_id) != str(current_user.user_id):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     return PDFFileResponse.from_orm(pdf_file)
-
-
-@router.get("/user/files", response_model=List[PDFFileResponse])
-async def get_user_pdf_files(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_any_platform),
-):
-    """사용자의 PDF 파일 목록 조회
-
-    Args:
-        skip: 건너뛸 개수
-        limit: 조회할 개수
-        db: 데이터베이스 세션
-        current_user: 인증된 사용자
-
-    Returns:
-        PDFFileResponse 목록
-    """
-    pdf_service = PDFFileService(db)
-    files = await pdf_service.get_user_pdf_files(
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-    )
-
-    return [PDFFileResponse.from_orm(f) for f in files]
 
 
 @router.delete("/{file_id}", status_code=204)
@@ -229,7 +242,7 @@ async def delete_pdf_file(
     if not pdf_file:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
-    if pdf_file.user_id != current_user.id:
+    if str(pdf_file.user_id) != str(current_user.user_id):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     # MinIO에서도 삭제 시도 (실패해도 계속 진행)
