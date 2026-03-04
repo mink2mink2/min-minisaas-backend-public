@@ -57,17 +57,19 @@ async def list_posts(
     limit: int = Query(20, ge=1, le=100),
     category_id: Optional[UUID] = Query(None),
     sort: str = Query("recent", pattern="^(recent|popular|trending)$"),
+    q: Optional[str] = Query(None, min_length=2, description="검색 쿼리"),
     request_user: Optional[AuthResult] = Depends(lambda: None),  # Optional auth
     _: str = Depends(verify_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    게시글 목록 조회 (공개)
+    게시글 목록 조회 (공개, 검색 포함)
 
     - page: 페이지 번호 (1부터 시작)
     - limit: 페이지당 항목 수
     - category_id: 카테고리 필터 (선택사항)
     - sort: 정렬 방식 (recent, popular, trending)
+    - q: 검색 쿼리 (선택사항, 최소 2글자)
     """
     service = PostService(db)
     user_id = None
@@ -79,13 +81,17 @@ async def list_posts(
     except:
         pass
 
-    posts, total = await service.list_posts(
-        page=page,
-        limit=limit,
-        category_id=category_id,
-        sort=sort,
-        user_id=user_id,
-    )
+    # 검색 쿼리가 있으면 search_posts 사용, 없으면 list_posts 사용
+    if q:
+        posts, total = await service.search_posts(q, page=page, limit=limit)
+    else:
+        posts, total = await service.list_posts(
+            page=page,
+            limit=limit,
+            category_id=category_id,
+            sort=sort,
+            user_id=user_id,
+        )
 
     # 반응 정보 추가
     items = []
@@ -261,41 +267,3 @@ async def delete_post(
     deleted = await service.delete_post(post_id, author_id)
     if not deleted:
         raise HTTPException(404, "Post not found or not authorized")
-
-
-@router.get("/search", response_model=dict)
-async def search_posts(
-    q: str = Query(..., min_length=2),
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    _: str = Depends(verify_api_key),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    게시글 전문 검색 (공개)
-
-    - q: 검색 쿼리 (최소 2글자)
-    """
-    service = PostService(db)
-    posts, total = await service.search_posts(q, page=page, limit=limit)
-
-    items = []
-    for post in posts:
-        author = await _get_author_brief(post.author_id, db)
-        item = PostListItem(
-            id=post.id,
-            title=post.title,
-            author=author,
-            category_id=post.category_id,
-            created_at=post.created_at,
-            updated_at=post.updated_at,
-            view_count=post.view_count,
-            like_count=post.like_count,
-            comment_count=post.comment_count,
-            bookmark_count=post.bookmark_count,
-            is_liked=False,
-            is_bookmarked=False,
-        )
-        items.append(item)
-
-    return PaginatedResponse.create(items, total, page, limit).__dict__
