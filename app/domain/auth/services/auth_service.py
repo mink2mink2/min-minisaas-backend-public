@@ -1,6 +1,8 @@
 """인증 서비스 - 공통 비즈니스 로직"""
 from typing import Tuple, Optional
 from datetime import datetime
+import random
+import string
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.domain.auth.models.user import User
@@ -13,6 +15,12 @@ class AuthService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _generate_random_nickname() -> str:
+        """임의의 닉네임 생성 (User_xxx 형식)"""
+        random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+        return f"User_{random_str}"
 
     async def get_or_create_user(
         self,
@@ -62,6 +70,7 @@ class AuthService:
             firebase_uid=user_id,
             email=email or "",
             name=name or "User",
+            nickname=self._generate_random_nickname(),
             picture=picture,
             points=10,  # 가입 보너스
         )
@@ -100,6 +109,7 @@ class AuthService:
             email=email,
             password_hash=hash_password(password),
             name="User",
+            nickname=self._generate_random_nickname(),
             points=10,
         )
         self.db.add(user)

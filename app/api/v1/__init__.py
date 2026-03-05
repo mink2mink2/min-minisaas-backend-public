@@ -8,11 +8,15 @@ from app.api.v1.endpoints.pdf import pdf_router
 from app.api.v1.endpoints.points import router as points_router
 from app.api.v1.endpoints.ledger import router as ledger_router
 from app.api.v1.endpoints.push import router as push_router
+from app.api.v1.endpoints.users import router as users_router
 
 api_router = APIRouter()
 
 # Auth endpoints (includes legacy email+password and new platform-specific endpoints)
 api_router.include_router(auth_router)
+
+# Users endpoints (profile management, search)
+api_router.include_router(users_router, prefix="/users", tags=["users"])
 
 # Board endpoints (posts, comments, likes, bookmarks)
 api_router.include_router(board_router)

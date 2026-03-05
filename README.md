@@ -67,6 +67,26 @@ pylint api/
 ## 📚 API 문서
 http://localhost:8000/docs (Swagger UI)
 
+## ⚡ 이벤트 드리븐 아키텍처
+
+이 프로젝트는 **이벤트 기반 아키텍처**를 따릅니다.
+
+### 원칙
+- 모든 도메인 상태 변화는 이벤트로 발행
+- 느슨한 결합을 통한 모듈 독립성 확보
+- 이벤트 구독자들이 비즈니스 로직 처리
+
+### 구현 상태 (2026-03-04)
+- ✅ Board: posts, comments, likes (완전 구현)
+- ✅ Chat: room, messages (완전 구현)
+- ✅ Points: charge, consume, refund (완전 구현)
+- ✅ PDF: file operations (완전 구현)
+- 🟡 Blog: partial (create only)
+- ❌ User profile updates (미구현)
+- ❌ Blog updates/deletes/subscriptions (미구현)
+
+**상세 문서**: [docs/I/10_implementation_plan.md](docs/I/10_implementation_plan.md#task-7-이벤트-드리븐-아키텍처-검증--부분-구현)
+
 ## 🔗 관련 프로젝트
 - [메인 저장소](https://github.com/your-username/min-minisaas)
 - [Frontend](https://github.com/your-username/min-minisaas-web)

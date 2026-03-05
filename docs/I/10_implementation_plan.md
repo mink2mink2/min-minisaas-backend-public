@@ -14,10 +14,11 @@
 | Task 4 | Board 백엔드 구현 | ~800 lines | ✅ 완료 | 2026-02-18 |
 | Task 5 | Blog 백엔드 구현 | ~1,000 lines | ✅ 완료 | 2026-02-22 |
 | Task 6 | Push 백엔드 구현 | ~1,195 lines | ✅ 완료 | 2026-03-01 |
-| Task 7 | 통합 테스트 | 143 테스트 계획 | 🔄 진행 중 (41/143) | 2026-03-15 목표 |
-| Task 8 | 배포 | GCP 배포 | ⏳ 대기 | 2026-03-20 목표 |
+| Task 7 | 이벤트 아키텍처 검증 | 문서화 | 🟡 검증 완료 | 2026-03-04 |
+| Task 8 | 통합 테스트 | 143 테스트 계획 | 🔄 진행 중 (41/143) | 2026-03-15 목표 |
+| Task 9 | 배포 | GCP 배포 | ⏳ 대기 | 2026-03-20 목표 |
 
-**전체 진행률**: 75% (핵심 기능 구현 완료, 테스트/배포 진행 중)
+**전체 진행률**: 75% (핵심 기능 구현 완료, 검증/테스트/배포 진행 중)
 
 ---
 
@@ -115,7 +116,56 @@
 
 ---
 
-## Task 7: 통합 테스트 🔄 (진행 중)
+## Task 7: 이벤트 드리븐 아키텍처 검증 🟡 (부분 구현)
+
+**기간**: 2026-03-04 ~ 2026-03-04 (검증 완료)
+**상태**: 검증 완료 → 일부 항목 재분류 필요
+**구현율**: 47% (25/53 이벤트)
+
+### 검증 내용
+- [x] 모든 도메인 서비스 코드 검토
+- [x] 이벤트 발행 현황 매핑
+- [x] RDIV 문서 업데이트
+
+### 구현 현황
+
+| 도메인 | 전체 | 구현 | 미구현 | 상태 |
+|--------|------|------|--------|------|
+| Board | 9 | 5 | 1 | ✅ 완전 |
+| Chat | 8 | 2 | 6 | 🟡 부분 |
+| Points | 4 | 3 | 1 | ✅ 완전 |
+| PDF | 4 | 4 | 0 | ✅ 완전 |
+| Blog | 8 | 2 | 5 | ❌ 미흡 |
+| User | 11 | 5 | 6 | ❌ 미흡 |
+| **합계** | **53** | **25** | **25** | **47%** |
+
+### 미구현 이벤트 (Priority Order)
+
+**P0 (Critical)**
+- [x] **API 구현됨**: user.profile_updated — `PUT /users/me` (users.py:65-105)
+  - ⚠️ **이벤트 발행 미구현**: endpoint에서 `user.profile_updated` 이벤트 퍼블리시 필요
+
+**P1 (High)**
+- [ ] blog.post.updated — `PUT /blog/posts/{id}` (blog_service.py:185-235)
+- [ ] blog.post.deleted — `DELETE /blog/posts/{id}` (blog_service.py:237-256)
+
+**P2 (Medium)**
+- [ ] blog.author.subscribed — `POST /blog/users/{id}/subscribe`
+- [ ] blog.author.unsubscribed — `DELETE /blog/users/{id}/subscribe`
+- [ ] board.post.bookmarked — `POST /board/posts/{id}/bookmark` (불일치: likes는 발행)
+
+**P3 (Low)**
+- [ ] 기타 Chat, Notification 이벤트들
+
+### 다음 작업
+- [ ] P0: user.profile_updated 이벤트 구현
+- [ ] P1: blog.post.updated/deleted 이벤트 구현
+- [ ] P2: blog 구독, board 북마크 이벤트 구현
+- [ ] 문서: D/90_decisions.md에 미구현 사유 기록
+
+---
+
+## Task 9a: 통합 테스트 🔄 (진행 중)
 
 **기간**: 2026-03-02 ~ 2026-03-15 (목표)
 **진행률**: 41/143 (29%)
@@ -140,7 +190,7 @@
 
 ---
 
-## Task 8: 배포 ⏳ (대기)
+## Task 9: 배포 ⏳ (대기)
 
 **예정**: 2026-03-20
 
