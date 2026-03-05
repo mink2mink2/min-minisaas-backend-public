@@ -101,9 +101,9 @@ async def ensure_board_categories_seeded() -> SeedPlan:
                     text(
                         """
                         INSERT INTO board_categories
-                            (id, name, slug, color, order_index, is_active)
+                            (id, name, slug, color, order_index, is_active, is_deleted, created_at, updated_at)
                         VALUES
-                            (:id, :name, :slug, :color, :order_index, true)
+                            (:id, :name, :slug, :color, :order_index, true, false, now(), now())
                         """
                     ),
                     insert_row,
@@ -117,6 +117,8 @@ async def ensure_board_categories_seeded() -> SeedPlan:
                         SET name = :name,
                             color = :color,
                             order_index = :order_index,
+                            is_deleted = COALESCE(is_deleted, false),
+                            created_at = COALESCE(created_at, now()),
                             is_active = true,
                             updated_at = now()
                         WHERE slug = :slug
