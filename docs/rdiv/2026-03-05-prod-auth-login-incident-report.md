@@ -5,6 +5,7 @@
 - Project: `min-minisaas-487110`
 - Region: `asia-northeast1` (Tokyo)
 - Service: `min-minisaas-backend`
+- Operator-confirmed DB access (forwarding): `localhost:45432`, database `mydatabase`
 
 ## Executive Summary
 - 로그인 장애는 단일 원인이 아니라 순차적으로 3개가 겹쳐 발생했다.
@@ -173,6 +174,9 @@
    - 신규 migration은 가능한 범위에서 재실행 안전(idempotent)하게 작성
    - `create_all` 기반 baseline과 후속 domain migration의 책임 경계 명확화
    - CI에서 빈 DB/부분 구성 DB 2가지 시나리오로 `alembic upgrade head` 검증
+8. Operator runbook adherence
+   - AI는 작업 시작 시 `docs/README.md` → `docs/AI/31_rdiv_execution_runbook.md` 순서로 확인 후 진행
+   - 운영 검증 명령 실행 전, 운영자가 지정한 실제 접속 정보(포트/DB명) 재확인
 
 ## Related App-side Work (same session)
 - Firebase 설정 재정렬(`flutterfire configure`)
