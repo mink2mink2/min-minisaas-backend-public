@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -95,16 +96,17 @@ async def ensure_board_categories_seeded() -> SeedPlan:
             plan = build_seed_plan(existing_by_slug)
 
             for row in plan.to_insert:
+                insert_row = {"id": str(uuid.uuid4()), **row}
                 await conn.execute(
                     text(
                         """
                         INSERT INTO board_categories
-                            (name, slug, color, order_index, is_active)
+                            (id, name, slug, color, order_index, is_active)
                         VALUES
-                            (:name, :slug, :color, :order_index, true)
+                            (:id, :name, :slug, :color, :order_index, true)
                         """
                     ),
-                    row,
+                    insert_row,
                 )
 
             for row in plan.to_update:

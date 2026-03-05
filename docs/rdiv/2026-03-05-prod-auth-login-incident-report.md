@@ -141,6 +141,19 @@
 - Result:
   - 스키마만 정상이고 seed가 비어 있는 상태를 verify 단계에서 즉시 감지 가능
 
+### 9) Startup seed 실행 시 `board_categories.id` NOT NULL 위반
+- Symptom:
+  - startup 로그에서 `alembic upgrade: ok` 이후 `seed board categories: failed`
+  - 오류: `null value in column "id" of relation "board_categories" violates not-null constraint`
+- Root cause:
+  - `scripts/seed_board_categories.py`의 INSERT가 `id` 컬럼을 명시하지 않음
+  - 일부 운영 스키마에서 `id`의 DB-level default가 없어 `NULL` 삽입으로 실패
+- Action:
+  - board seed INSERT를 `(id, name, slug, color, order_index, is_active)`로 수정
+  - `id`는 앱에서 `uuid4` 생성 후 바인딩
+- Result:
+  - DB default 유무와 관계없이 board 카테고리 seed가 동일하게 동작
+
 ## Code Changes
 - Commit `8141026`
   - Structured auth failure logs 추가
