@@ -1,6 +1,9 @@
 """JWT 재사용 방지 및 무효화 관리"""
 import hashlib
+import logging
 from app.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 
 class JWTManager:
@@ -27,16 +30,26 @@ class JWTManager:
             Exception: 검증 실패 시
         """
         key = f"{self.JWT_USED_PREFIX}:{user_id}:{iat}"
-        existing = await cache.get(key)
+        try:
+            existing = await cache.get(key)
 
-        if existing:
-            return False  # 이미 사용된 토큰
+            if existing:
+                return False  # 이미 사용된 토큰
 
-        # 토큰 남은 수명만큼 TTL 설정 (초 단위)
-        ttl = max(exp - iat, 1)
-        await cache.set(key, "used", ttl_seconds=ttl)
-
-        return True
+            # 토큰 남은 수명만큼 TTL 설정 (초 단위)
+            ttl = max(exp - iat, 1)
+            await cache.set(key, "used", ttl_seconds=ttl)
+            return True
+        except Exception as e:
+            # Redis 장애 시 인증 전체를 500으로 터뜨리지 않기 위해 fail-open 처리
+            logger.warning(
+                "JWT replay check skipped due to cache error: user_id=%s iat=%s exp=%s reason=%s",
+                user_id,
+                iat,
+                exp,
+                str(e),
+            )
+            return True
 
     async def revoke_user_jwts(self, user_id: str) -> None:
         """
@@ -46,7 +59,14 @@ class JWTManager:
             user_id: 사용자 ID
         """
         key = f"{self.JWT_REVOKED_PREFIX}:{user_id}"
-        await cache.set(key, "revoked", ttl_seconds=86400 * 7)  # 7일
+        try:
+            await cache.set(key, "revoked", ttl_seconds=86400 * 7)  # 7일
+        except Exception as e:
+            logger.warning(
+                "JWT revoke skipped due to cache error: user_id=%s reason=%s",
+                user_id,
+                str(e),
+            )
 
     async def is_revoked(self, user_id: str) -> bool:
         """
@@ -59,7 +79,15 @@ class JWTManager:
             True if revoked, False otherwise
         """
         key = f"{self.JWT_REVOKED_PREFIX}:{user_id}"
-        return await cache.get(key) is not None
+        try:
+            return await cache.get(key) is not None
+        except Exception as e:
+            logger.warning(
+                "JWT revoked-check skipped due to cache error: user_id=%s reason=%s",
+                user_id,
+                str(e),
+            )
+            return False
 
     def _hash_token(self, token: str) -> str:
         """토큰을 해시 처리 (Redis에 저장할 때)"""
@@ -96,40 +124,49 @@ class JWTManager:
         token_hash = self._hash_token(old_refresh_token)
 
         # 기존 히스토리 조회
-        history_data = await cache.get(history_key)
-        if history_data is None:
-            history_data = {
-                "tokens": {},
-                "generation_count": 0,
-            }
+        try:
+            history_data = await cache.get(history_key)
+            if history_data is None:
+                history_data = {
+                    "tokens": {},
+                    "generation_count": 0,
+                }
 
         # 토큰이 이미 사용되었는지 확인
-        if token_hash in history_data["tokens"]:
-            # 🔴 토큰 재사용 감지!
-            # SecurityLog 기록
-            await self._log_security_event(
-                user_id=user_id,
-                event_type="TOKEN_REUSE_DETECTED",
-                device_id=device_id,
-                details={
-                    "token_hash": token_hash,
-                    "generation_count": history_data["generation_count"],
-                    "previous_usage": history_data["tokens"].get(token_hash),
-                },
+            if token_hash in history_data["tokens"]:
+                # 🔴 토큰 재사용 감지!
+                # SecurityLog 기록
+                await self._log_security_event(
+                    user_id=user_id,
+                    event_type="TOKEN_REUSE_DETECTED",
+                    device_id=device_id,
+                    details={
+                        "token_hash": token_hash,
+                        "generation_count": history_data["generation_count"],
+                        "previous_usage": history_data["tokens"].get(token_hash),
+                    },
+                )
+                return False
+
+            # 정상 토큰 사용: 히스토리에 기록
+            import time
+
+            history_data["tokens"][token_hash] = int(time.time())
+            history_data["generation_count"] += 1
+
+            # Redis에 업데이트 (TTL = REFRESH_TOKEN_EXPIRE_DAYS)
+            ttl = settings_refresh_expire_days * 86400
+            await cache.set(history_key, history_data, ttl_seconds=ttl)
+
+            return True
+        except Exception as e:
+            logger.warning(
+                "Refresh reuse check skipped due to cache error: user_id=%s device_id=%s reason=%s",
+                user_id,
+                device_id,
+                str(e),
             )
-            return False
-
-        # 정상 토큰 사용: 히스토리에 기록
-        import time
-
-        history_data["tokens"][token_hash] = int(time.time())
-        history_data["generation_count"] += 1
-
-        # Redis에 업데이트 (TTL = REFRESH_TOKEN_EXPIRE_DAYS)
-        ttl = settings_refresh_expire_days * 86400
-        await cache.set(history_key, history_data, ttl_seconds=ttl)
-
-        return True
+            return True
 
     async def _log_security_event(
         self,
