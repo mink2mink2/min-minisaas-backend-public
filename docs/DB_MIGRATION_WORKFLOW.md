@@ -8,8 +8,8 @@
 - 운영 경로에서 `Base.metadata.create_all()`을 직접 호출하지 않습니다.
 - 최초 설치와 업데이트를 분리합니다.
   - 최초 설치: `bootstrap + migrate + seed-categories + verify`
-  - 업데이트: `migrate + verify`
-- `verify`는 연결성뿐 아니라 필수 테이블/컬럼 스키마 가드까지 통과해야 성공으로 봅니다.
+  - 업데이트: `migrate + seed-categories + seed-blog-categories + verify`
+- `verify`는 연결성뿐 아니라 필수 테이블/컬럼 스키마 가드와 기본 카테고리 seed 가드까지 통과해야 성공으로 봅니다.
 
 ## 명령 요약
 ```bash
@@ -23,6 +23,7 @@ make seed-categories  # board 기본 카테고리 멱등 시드
 make seed-blog-categories  # blog 기본 카테고리 멱등 시드
 make verify      # postgres/redis + 필수 스키마 점검
 make verify-schema  # 필수 스키마 점검 단독 실행
+make release-prepare  # 운영 업데이트용(bootstrap 없이 migrate+seed+verify)
 ```
 
 ## 신규 스키마 변경 절차
@@ -49,8 +50,9 @@ make verify
 
 ## 배포 순서
 1. 앱 배포 전 DB migration 먼저 적용 (`make migrate`)
-2. migration 성공 후 `make verify` 통과 확인
-3. 검증 통과 후 앱 버전 배포
+2. migration 성공 후 seed 적용 (`make seed-categories && make seed-blog-categories`)
+3. `make verify` 통과 확인
+4. 검증 통과 후 앱 버전 배포
 
 ## 롤백 원칙
 - 긴급 이슈 시 앱 기능 플래그로 우선 차단
@@ -73,4 +75,7 @@ make verify
 - 담당자는 실패 메시지의 테이블/컬럼 누락 원인에 맞는 migration을 적용합니다.
   - 기본 조치: `.venv/bin/alembic upgrade head`
   - migration 누락이면 새 revision 추가 후 재적용
+- seed 누락 실패 시 기본 조치:
+  - `.venv/bin/python scripts/seed_board_categories.py`
+  - `.venv/bin/python scripts/seed_blog_categories.py`
 - 조치 후 `make verify`를 재실행해 success를 확인한 뒤에만 서비스 오픈합니다.

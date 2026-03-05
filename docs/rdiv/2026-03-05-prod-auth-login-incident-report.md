@@ -5,7 +5,7 @@
 - Project: `min-minisaas-487110`
 - Region: `asia-northeast1` (Tokyo)
 - Service: `min-minisaas-backend`
-- Operator-confirmed DB access (forwarding): `localhost:45432`, database `mydatabase`
+- Operator-confirmed DB access (forwarding): confirmed via secure local tunnel (details omitted)
 
 ## Executive Summary
 - 로그인 장애는 단일 원인이 아니라 순차적으로 3개가 겹쳐 발생했다.
@@ -27,8 +27,8 @@
 6. `FIREBASE_PROJECT_ID` Secret에도 trailing newline 확인/수정 + revision 롤링
 7. 이후 로그인 경로에서 500 발생, 로그에서 Redis `Connection reset by peer` 확인
 8. `jwt_manager`에 Redis 예외 fail-open 보호 로직 추가/배포
-9. 운영 Redis URL 점검 결과 TLS 미적용(`redis://...:6380`) 확인
-10. `REDIS_URL`을 `rediss://...:6380/1`로 변경 + revision 롤링
+9. 운영 Redis URL 점검 결과 TLS 미적용(`redis://<host>:<port>/<db>`) 확인
+10. `REDIS_URL`을 `rediss://<host>:<port>/<db>`로 변경 + revision 롤링
 
 ## Incident Details
 
@@ -70,11 +70,11 @@
 
 ### 4) Production Redis TLS 미적용
 - Symptom:
-  - 배포 `REDIS_URL`이 `redis://redis.atg.re.kr:6380/1`
+  - 배포 `REDIS_URL`이 `redis://<host>:<port>/<db>`
 - Root cause:
   - 운영 URL 스킴이 TLS 스킴(`rediss`)이 아님
 - Action:
-  - Secret `REDIS_URL` -> `rediss://redis.atg.re.kr:6380/1` 변경
+  - Secret `REDIS_URL` -> `rediss://<host>:<port>/<db>` 변경
   - Cloud Run 재배포
 - Result:
   - 운영 Redis TLS 적용 완료
@@ -85,9 +85,9 @@
   - stacktrace tail: `asyncpg.exceptions.InvalidCatalogNameError: database "minisaas_db" does not exist`
 - Root cause (current):
   - `DATABASE_URL`의 DB 이름이 실제 PostgreSQL catalog와 불일치 가능성 큼
-  - 앞선 URL 파손 이슈(`user:@password@host`) 수정 후, 연결은 되지만 대상 DB catalog가 없음
+  - 앞선 URL 파손 이슈(`user:password@host` 형태 불일치) 수정 후, 연결은 되지만 대상 DB catalog가 없음
 - Action taken:
-  - `DATABASE_URL` URL 포맷 정상화 완료 (`user:password@host` 형태)
+  - `DATABASE_URL` URL 포맷 정상화 완료 (credential/host 구문 정합)
   - 해당 오류를 본 리포트에 추가 기록
 - Next action (required):
   1. 운영 PostgreSQL에서 실제 DB 목록 확인
@@ -123,6 +123,23 @@
 - Expected effect:
   - 최초/재배포/부분 선반영 상태에서 migration 충돌 확률 감소
   - 동일 migration 재실행 시 실패 대신 no-op에 가깝게 동작
+
+### 8) Board category seed 누락 재발
+- Symptom:
+  - 운영에서 `board_categories`가 비어 API 응답에서 카테고리 목록 누락
+- Root cause:
+  - 운영 업데이트 경로가 `migrate` 중심으로 실행되고, 기본 카테고리 seed가 별도 단계로 분리되어 있어 누락 가능
+- Action:
+  1. 운영용 DB 준비 타깃 `make release-prepare` 추가
+     - `migrate + seed-categories + seed-blog-categories + verify`
+  2. `scripts/verify_schema.py`에 seed 가드 추가
+     - `board_categories`, `blog_categories` 최소 row 수 확인
+     - 누락 시 verify 실패로 배포 차단
+  3. 컨테이너 startup DB prepare 적용 (`myimcoming` 패턴 정렬)
+     - `docker/entrypoint.sh`에서 `alembic upgrade head` → seed 2종 → verify 실행 후 앱 기동
+     - `RUN_STARTUP_DB_PREPARE` 플래그로 on/off 제어 가능
+- Result:
+  - 스키마만 정상이고 seed가 비어 있는 상태를 verify 단계에서 즉시 감지 가능
 
 ## Code Changes
 - Commit `8141026`
@@ -177,6 +194,9 @@
 8. Operator runbook adherence
    - AI는 작업 시작 시 `docs/README.md` → `docs/AI/31_rdiv_execution_runbook.md` 순서로 확인 후 진행
    - 운영 검증 명령 실행 전, 운영자가 지정한 실제 접속 정보(포트/DB명) 재확인
+9. Seed execution guarantee
+   - 운영 업데이트 표준 명령은 `make release-prepare`로 고정
+   - CI/CD 또는 Run Job에서도 `migrate` 이후 seed 단계를 분리 호출하고 verify 통과를 배포 조건으로 사용
 
 ## Related App-side Work (same session)
 - Firebase 설정 재정렬(`flutterfire configure`)

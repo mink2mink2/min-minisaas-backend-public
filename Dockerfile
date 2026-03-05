@@ -32,6 +32,7 @@ ENV PATH=/root/.local/bin:$PATH \
 
 # Copy application code
 COPY . .
+RUN chmod +x /app/docker/entrypoint.sh
 
 # Expose port (Cloud Run uses PORT env var, default 8080)
 EXPOSE 8080
@@ -40,5 +41,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run the app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Startup DB prepare (alembic + seed + verify) then run app
+ENV RUN_STARTUP_DB_PREPARE=true
+ENTRYPOINT ["/app/docker/entrypoint.sh"]

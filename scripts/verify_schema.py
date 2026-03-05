@@ -78,6 +78,11 @@ REQUIRED_COLUMNS: dict[str, set[str]] = {
     },
 }
 
+REQUIRED_MIN_ROWS: dict[str, int] = {
+    "board_categories": 1,
+    "blog_categories": 1,
+}
+
 
 def normalized_pg_url(database_url: str) -> str:
     return database_url.replace("postgresql+asyncpg://", "postgresql://")
@@ -95,6 +100,20 @@ def detect_schema_issues(
         missing = sorted(required_columns[table_name] - existing_columns[table_name])
         for column_name in missing:
             issues.append(f"missing column: {table_name}.{column_name}")
+    return issues
+
+
+def detect_seed_issues(
+    row_counts: dict[str, int],
+    required_min_rows: dict[str, int],
+) -> list[str]:
+    issues: list[str] = []
+    for table_name, min_rows in sorted(required_min_rows.items()):
+        current = row_counts.get(table_name, 0)
+        if current < min_rows:
+            issues.append(
+                f"seed data missing: {table_name} has {current} row(s), requires >= {min_rows}"
+            )
     return issues
 
 
@@ -119,10 +138,21 @@ async def load_existing_columns(database_url: str) -> dict[str, set[str]]:
     return columns
 
 
+async def load_row_counts(database_url: str, table_names: set[str]) -> dict[str, int]:
+    conn = await asyncpg.connect(normalized_pg_url(database_url))
+    counts: dict[str, int] = {}
+    try:
+        for table_name in sorted(table_names):
+            value = await conn.fetchval(f"SELECT COUNT(*)::int FROM {table_name}")
+            counts[table_name] = int(value or 0)
+    finally:
+        await conn.close()
+    return counts
+
+
 async def main() -> int:
     existing_columns = await load_existing_columns(settings.DATABASE_URL)
     issues = detect_schema_issues(existing_columns, REQUIRED_COLUMNS)
-
     if issues:
         print("SCHEMA VERIFY FAIL")
         for issue in issues:
@@ -132,7 +162,28 @@ async def main() -> int:
         )
         return 1
 
+    row_counts = await load_row_counts(
+        settings.DATABASE_URL,
+        set(REQUIRED_MIN_ROWS.keys()),
+    )
+    seed_issues = detect_seed_issues(row_counts, REQUIRED_MIN_ROWS)
+
+    if seed_issues:
+        print("SCHEMA VERIFY FAIL")
+        for issue in seed_issues:
+            print(f"- {issue}")
+        print(
+            "Action: run '.venv/bin/python scripts/seed_board_categories.py' and "
+            "'.venv/bin/python scripts/seed_blog_categories.py', then re-run verify_schema.py"
+        )
+        return 1
+
     print("SCHEMA VERIFY PASS: required tables/columns are present")
+    print(
+        "SEED VERIFY PASS: "
+        f"board_categories={row_counts['board_categories']}, "
+        f"blog_categories={row_counts['blog_categories']}"
+    )
     return 0
 
 

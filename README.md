@@ -34,10 +34,18 @@ make seed-categories  # board 기본 카테고리 멱등 시드
 make seed-blog-categories  # blog 기본 카테고리 멱등 시드
 make verify      # postgres/redis + 필수 스키마 점검 (실패 시 배포 중단)
 make verify-schema  # 스키마만 단독 점검
+
+# 운영/배포 전 DB 준비 (bootstrap 없이)
+make release-prepare  # migrate + seed-categories + seed-blog-categories + verify
 ```
+
+### Cloud Run startup DB prepare
+- 컨테이너 기동 시 기본값으로 `alembic + seed + verify`를 실행한 뒤 API를 시작합니다.
+- 환경변수 `RUN_STARTUP_DB_PREPARE=false`를 주면 startup DB prepare를 건너뛸 수 있습니다.
 
 ### 게시판 카테고리 운영 규칙
 - 기본 카테고리는 `make setup`/`make seed-categories`에서 자동 보장됩니다.
+- 운영 업데이트는 `make release-prepare`로 seed 누락을 방지합니다.
 - 운영 중 카테고리 변경은 API(`POST/PUT /api/v1/board/categories`)로 관리합니다.
 
 ### DB 문서

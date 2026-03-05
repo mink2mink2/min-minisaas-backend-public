@@ -2,7 +2,7 @@ PYTHON := .venv/bin/python
 ALEMBIC := .venv/bin/alembic
 PYTEST := .venv/bin/pytest
 
-.PHONY: bootstrap migrate seed-categories seed-blog-categories verify verify-schema setup test-bootstrap test-seed
+.PHONY: bootstrap migrate seed-categories seed-blog-categories verify verify-schema setup release-prepare test-bootstrap test-seed
 
 bootstrap:
 	$(PYTHON) scripts/bootstrap_db.py
@@ -25,6 +25,9 @@ verify-schema:
 
 setup: bootstrap migrate seed-categories seed-blog-categories verify
 	@echo "Setup complete"
+
+release-prepare: migrate seed-categories seed-blog-categories verify
+	@echo "Release DB prepare complete"
 
 test-bootstrap:
 	$(PYTEST) -q tests/test_bootstrap_db.py
