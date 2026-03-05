@@ -1,6 +1,6 @@
 # min-minisaas Backend — 문서 목록
 
-**최종 업데이트**: 2026-02-16
+**최종 업데이트**: 2026-03-05
 
 ## 🚀 빠른 시작 (5분)
 
@@ -12,6 +12,11 @@
 ---
 
 ## 📖 세부 문서
+
+### 장애/리포트
+- **`rdiv/2026-03-05-prod-auth-login-incident-report.md`** ⭐
+  - Production 로그인 장애 종합 리포트
+  - 원인/조치/Cloud Run 반영 이력/재발 방지 체크리스트
 
 ### 현황 (최신)
 - **`IMPLEMENTATION_STATUS.md`** ⭐

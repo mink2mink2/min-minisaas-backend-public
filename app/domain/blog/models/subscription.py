@@ -8,8 +8,8 @@ class BlogSubscription(BaseModel):
     """블로그 작성자 구독(팔로우)"""
     __tablename__ = "blog_subscriptions"
 
-    subscriber_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    subscriber_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("subscriber_id", "author_id", name="uq_blog_subscriptions_subscriber_author"),

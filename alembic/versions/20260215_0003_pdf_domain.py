@@ -19,6 +19,11 @@ depends_on = None
 
 def upgrade() -> None:
     """Create PDF domain tables"""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("pdf_files"):
+        return
+
     # Create pdf_files table (using text columns for enum-like behavior)
     op.create_table(
         'pdf_files',

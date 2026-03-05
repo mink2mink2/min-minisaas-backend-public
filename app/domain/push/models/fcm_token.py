@@ -8,9 +8,9 @@ class FcmToken(BaseModel):
     """FCM 토큰 (Device Token)"""
     __tablename__ = "fcm_tokens"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    token = Column(String(500), nullable=False, unique=True, index=True)
-    platform = Column(String(20), nullable=False, index=True)  # android, ios, web
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    token = Column(String(500), nullable=False, unique=True)
+    platform = Column(String(20), nullable=False)  # android, ios, web
     device_name = Column(String(200), nullable=True)
     is_active = Column(Boolean, default=True)
     last_used_at = Column(DateTime, nullable=True)

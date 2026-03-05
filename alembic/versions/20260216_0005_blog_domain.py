@@ -17,6 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("blog_categories"):
+        return
+
     # Create blog_categories table
     op.create_table(
         'blog_categories',

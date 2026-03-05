@@ -11,7 +11,7 @@ class ChatMessage(BaseModel):
     __tablename__ = "chat_messages"
 
     room_id = Column(UUID(as_uuid=True), ForeignKey("chat_rooms.id"), nullable=False, index=True)
-    sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
     message_type = Column(String(20), nullable=False, default="text")
 

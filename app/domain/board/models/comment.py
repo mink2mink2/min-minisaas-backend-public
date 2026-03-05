@@ -8,11 +8,11 @@ class Comment(BaseModel):
     """게시물 댓글 (최대 2레벨)"""
     __tablename__ = "comments"
 
-    post_id = Column(UUID(as_uuid=True), ForeignKey("board_posts.id"), nullable=False, index=True)
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("board_posts.id"), nullable=False)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # 부모 댓글 (답댓글)
-    parent_comment_id = Column(UUID(as_uuid=True), ForeignKey("comments.id"), nullable=True, index=True)
+    parent_comment_id = Column(UUID(as_uuid=True), ForeignKey("comments.id"), nullable=True)
 
     content = Column(Text, nullable=False)
 

@@ -19,6 +19,10 @@ depends_on = None
 
 def upgrade() -> None:
     """Create board system tables with search and reaction support"""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("board_categories"):
+        return
 
     # Create board_categories table
     op.create_table(

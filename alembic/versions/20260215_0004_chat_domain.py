@@ -19,6 +19,11 @@ depends_on = None
 
 def upgrade() -> None:
     """Create chat domain tables"""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("chat_rooms"):
+        return
+
     op.create_table(
         "chat_rooms",
         sa.Column(

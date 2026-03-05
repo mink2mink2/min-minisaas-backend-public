@@ -17,6 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("fcm_tokens"):
+        return
+
     # Create fcm_tokens table
     op.create_table(
         'fcm_tokens',

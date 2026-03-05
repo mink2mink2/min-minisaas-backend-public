@@ -22,10 +22,10 @@ class BoardPost(BaseModel):
     status = Column(String(20), default=PostStatus.PUBLISHED.value)
 
     # 작성자
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # 카테고리 (선택사항)
-    category_id = Column(UUID(as_uuid=True), ForeignKey("board_categories.id"), nullable=True, index=True)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("board_categories.id"), nullable=True)
 
     # 메타데이터
     tags = Column(ARRAY(String), default=[])

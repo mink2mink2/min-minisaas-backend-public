@@ -18,7 +18,7 @@ class BlogPost(BaseModel):
     featured_image_url = Column(String(500), nullable=True)
 
     # 작성자
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # 카테고리 및 태그
     category_id = Column(UUID(as_uuid=True), ForeignKey("blog_categories.id"), nullable=True)

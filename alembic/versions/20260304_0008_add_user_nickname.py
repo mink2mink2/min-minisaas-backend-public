@@ -17,16 +17,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "users",
-        sa.Column(
-            "nickname",
-            sa.String(50),
-            nullable=True,
-            comment="사용자 표시명 (게시글/댓글에 표시될 이름)"
-        ),
-    )
+    op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(50)")
 
 
 def downgrade() -> None:
-    op.drop_column("users", "nickname")
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS nickname")

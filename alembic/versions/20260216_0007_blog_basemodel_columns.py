@@ -17,53 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "blog_categories",
-        sa.Column(
-            "is_deleted",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
-
-    op.add_column(
-        "blog_likes",
-        sa.Column(
-            "updated_at",
-            sa.DateTime(),
-            nullable=True,
-            server_default=sa.text("now()"),
-        ),
-    )
-    op.add_column(
-        "blog_likes",
-        sa.Column(
-            "is_deleted",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
-
-    op.add_column(
-        "blog_subscriptions",
-        sa.Column(
-            "updated_at",
-            sa.DateTime(),
-            nullable=True,
-            server_default=sa.text("now()"),
-        ),
-    )
-    op.add_column(
-        "blog_subscriptions",
-        sa.Column(
-            "is_deleted",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
+    op.execute("ALTER TABLE blog_categories ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false")
+    op.execute("ALTER TABLE blog_likes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT now()")
+    op.execute("ALTER TABLE blog_likes ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false")
+    op.execute("ALTER TABLE blog_subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT now()")
+    op.execute("ALTER TABLE blog_subscriptions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false")
 
 
 def downgrade() -> None:

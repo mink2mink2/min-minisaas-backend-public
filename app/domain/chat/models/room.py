@@ -12,7 +12,7 @@ class ChatRoom(BaseModel):
 
     name = Column(String(120), nullable=False)
     is_group = Column(Boolean, default=False, nullable=False)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     __table_args__ = (
         Index("ix_chat_rooms_created_by", "created_by"),

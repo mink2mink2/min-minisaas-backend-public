@@ -8,12 +8,12 @@ class PushNotification(BaseModel):
     """푸시 알림"""
     __tablename__ = "push_notifications"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title = Column(String(200), nullable=False)
     body = Column(Text, nullable=False)
-    event_type = Column(String(50), nullable=True, index=True)  # blog.post.created, chat.message, etc
+    event_type = Column(String(50), nullable=True)  # blog.post.created, chat.message, etc
     related_id = Column(UUID(as_uuid=True), nullable=True)  # post_id, message_id, etc
-    is_read = Column(Boolean, default=False, index=True)
+    is_read = Column(Boolean, default=False)
     sent_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
 
