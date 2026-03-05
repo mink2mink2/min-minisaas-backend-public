@@ -40,8 +40,9 @@ make release-prepare  # migrate + seed-categories + seed-blog-categories + verif
 ```
 
 ### Cloud Run startup DB prepare
-- 컨테이너 기동 시 기본값으로 `alembic + seed + verify`를 실행한 뒤 API를 시작합니다.
+- 컨테이너 기동 시 기본값으로 `alembic + seed`를 실행한 뒤 API를 시작합니다.
 - 환경변수 `RUN_STARTUP_DB_PREPARE=false`를 주면 startup DB prepare를 건너뛸 수 있습니다.
+- 환경변수 `RUN_STARTUP_DB_PREPARE_STRICT=true`면 prepare 실패 시 컨테이너를 종료합니다.
 
 ### 게시판 카테고리 운영 규칙
 - 기본 카테고리는 `make setup`/`make seed-categories`에서 자동 보장됩니다.

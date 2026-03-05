@@ -41,6 +41,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Startup DB prepare (alembic + seed + verify) then run app
+# Startup DB prepare (alembic + seed) then run app
 ENV RUN_STARTUP_DB_PREPARE=true
+ENV RUN_STARTUP_DB_PREPARE_STRICT=false
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
