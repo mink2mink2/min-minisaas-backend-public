@@ -71,6 +71,7 @@
 | T6 | Push Backend+App 구현 | 2026-02-28 | ✅ ~2,330줄 |
 | T7-P1 | Service Unit Tests (20개) | 2026-02-16 | ✅ 20/20 통과 |
 | T7-P2 | API Endpoint Tests (21개) | 2026-02-16 | ✅ 21/21 통과 |
+| T8A | Coin simulator API | 2026-03-06 | ✅ dashboard/start/stop/settings + auth role 확장 |
 
 ---
 

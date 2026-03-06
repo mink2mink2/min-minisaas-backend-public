@@ -73,6 +73,12 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8080"]
+    SUPERUSER_EMAILS: list[str] = []
+    LOCAL_COIN_API_BASE_URL: Optional[str] = None
+    LOCAL_COIN_API_KEY: Optional[str] = None
+    LOCAL_COIN_API_BEARER_TOKEN: Optional[str] = None
+    LOCAL_COIN_API_TIMEOUT_SECONDS: int = 5
+    COIN_SIMULATOR_CACHE_TTL_SECONDS: int = 5
 
     @property
     def REDIS_URL_WITH_AUTH(self) -> str:

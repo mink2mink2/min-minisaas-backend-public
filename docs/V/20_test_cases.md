@@ -474,3 +474,30 @@ class MiniSaaSUser(HttpUser):
 - [V/10_test_plan.md](10_test_plan.md) — 전체 테스트 계획
 - [R/20_acceptance_criteria.md](../R/20_acceptance_criteria.md) — 인수 기준
 - [R/40_traceability.md](../R/40_traceability.md) — 테스트 추적성
+
+---
+
+## Coin Simulator 테스트
+
+### TC-CS01-01: 대시보드 조회
+
+```python
+response = client.get("/api/v1/coin-simulator/dashboard", headers=auth_headers)
+assert response.status_code == 200
+assert "status" in response.json()
+```
+
+### TC-CS02-01: 일반 사용자 start 차단
+
+```python
+response = client.post("/api/v1/coin-simulator/start", headers=auth_headers)
+assert response.status_code == 403
+```
+
+### TC-CS02-02: superuser 설정 저장
+
+```python
+response = client.put("/api/v1/coin-simulator/settings", headers=auth_headers, json=payload)
+assert response.status_code == 200
+assert response.json()["permissions"]["can_configure"] is True
+```

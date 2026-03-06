@@ -7,7 +7,6 @@ from app.api.v1.dependencies.api_key import verify_api_key
 from app.api.v1.dependencies.auth import verify_any_platform
 from app.core.database import get_db
 from app.domain.auth.services.auth_service import AuthService
-from app.domain.auth.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Common"])
 
@@ -175,7 +174,7 @@ async def get_current_user(
 
     return {
         "success": True,
-        "user": UserResponse.model_validate(user).model_dump(mode='json'),
+        "user": AuthService.serialize_user_response(user),
         "csrf_token": csrf_token,
     }
 

@@ -33,6 +33,43 @@
 - **이벤트 드리븐** ⚠️ events.py 수정 완료 / 기술부채: 일부 이벤트 미연결
 - **보안** 🔴 운영 전 필수: `FIREBASE_PROJECT_ID` 실제 값 주입 필요
 
+## 2026-03-06
+
+### feat: coin simulator 대시보드/제어 API 추가
+- `api/v1/endpoints/coin_simulator.py` 추가
+  - `GET /api/v1/coin-simulator/dashboard`
+  - `POST /api/v1/coin-simulator/start`
+  - `POST /api/v1/coin-simulator/stop`
+  - `PUT /api/v1/coin-simulator/settings`
+- `domain/coin_simulator/services.py` 추가
+  - 로컬 코인 서버 API 호출
+  - Redis 캐시를 통한 대시보드 조회 최적화
+  - start/stop/설정 저장 후 캐시 즉시 갱신
+- `domain/coin_simulator/schemas.py` 추가
+  - 상태/자산/포지션/거래/설정/권한 스키마 정의
+
+### fix: coin simulator 조회 fallback 보강
+- live 서버 설정이 없거나 연결 실패 시 `GET /api/v1/coin-simulator/dashboard`는 503 대신 mock 대시보드 반환
+- 응답에 `data_source`, `notice`를 포함해 앱이 mock/live/cache 상태를 명시적으로 표시할 수 있게 조정
+- start/stop/settings 제어 API는 기존처럼 live 서버 연결이 필요하며, 실패 시 503 유지
+
+### security: coin simulator 제어 보호 강화
+- `POST /api/v1/coin-simulator/start`, `POST /stop`, `PUT /settings`에 사용자별 rate limit 추가 (현재 5 req/min)
+- control endpoint 성공/실패를 운영 로그에 감사 로그 형태로 기록
+- 보안 리뷰 문서에 proxy/cache 운영 체크리스트 및 코드 검수 결과 반영
+
+### feat: 설정 기반 superuser 응답 확장
+- `core/config.py`: `SUPERUSER_EMAILS` 설정 추가
+- `domain/auth/schemas/user.py`: `is_superuser` 필드 추가
+- `/auth/me` 및 로그인 응답에 `is_superuser` 포함
+
+### test: coin simulator 엔드포인트 테스트 추가
+- `tests/test_coin_simulator_endpoints.py`
+  - 일반 사용자 대시보드 조회
+  - 일반 사용자 start 차단(403)
+  - superuser 설정 저장 성공
+  - live 미연결 시 mock fallback 반환
+
 ---
 
 ## 2026-03-04

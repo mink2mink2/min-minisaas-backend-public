@@ -49,6 +49,38 @@
 
 ---
 
+## Coin Simulator Proxy/Cache 보안
+
+- [x] `LOCAL_COIN_API_BASE_URL`은 코드상 환경변수로만 관리된다
+- [x] Coin simulator upstream URL을 관리자 UI/DB 설정으로 임의 변경할 수 없다
+- [ ] `LOCAL_COIN_API_KEY` 또는 `LOCAL_COIN_API_BEARER_TOKEN`이 운영 환경에 설정되어 있다
+- [x] upstream 인증 헤더가 애플리케이션 로그/에러 응답에 노출되지 않는다
+- [x] `GET /api/v1/coin-simulator/dashboard`는 `data_source`(`live`/`cache`/`mock`)를 명시한다
+- [x] `mock` 또는 `cache` 상태를 live와 혼동하지 않도록 notice/배너가 유지된다
+- [x] `POST /api/v1/coin-simulator/start`, `POST /stop`, `PUT /settings`는 superuser만 가능하다
+- [x] control endpoint 호출 시 감사 로그를 남긴다:
+  - [x] 요청자 식별자
+  - [x] action(start/stop/settings)
+  - [x] 성공/실패 여부
+  - [x] 실행 시각
+- [x] control endpoint에 사용자별 rate limit이 적용되어 있다 (현재: 5 req/min)
+- [x] upstream timeout이 짧게 설정되어 있다 (현재 기본값: 5초)
+- [ ] 잘못된 upstream 응답은 검증 후 캐시하며, 비정상 응답을 장기 캐시하지 않는다
+- [x] `COIN_SIMULATOR_CACHE_TTL_SECONDS`는 짧게 유지된다 (현재 기본값: 5초)
+- [ ] production에서 backend가 접근 가능한 upstream host/port가 coinbot로 제한되어 있다
+- [ ] remote 운영 환경에서는 backend↔coinbot 통신이 private network 또는 TLS로 보호된다
+
+### Coin Simulator 보안 메모
+
+- 현재 구조는 앱이 coinbot을 직접 호출하지 않고 backend가 proxy/cache 역할을 수행한다.
+- 따라서 주요 위험은 SSRF, control endpoint 오남용, upstream secret 노출, stale cache 오인이다.
+- URL 동적 변경 기능을 추가할 경우 allowlist 검증 없이 배포하지 않는다.
+- 2026-03-06 기준 코드 검수 결과:
+  - 구현 완료: superuser gate, mock/cache/live 구분, control audit log, control rate limit, 짧은 timeout/TTL
+  - 운영 확인 필요: upstream secret 주입, TLS/private network, host/port 접근 제한
+
+---
+
 ## SQL Injection 방지
 
 - [ ] 모든 DB 쿼리에 SQLAlchemy ORM 또는 파라미터화 쿼리를 사용한다
@@ -153,6 +185,8 @@ app = FastAPI(
 
 | 날짜 | 변경 내용 | 체크 완료 | 담당자 |
 |------|----------|---------|--------|
+| 2026-03-06 | Coin simulator proxy/cache 보안 체크리스트 추가 | ✅ SSRF/secret/control/cache 점검 항목 문서화 | Codex |
+| 2026-03-06 | Coin simulator proxy/cache API 추가 | ✅ 인증, superuser 제어, local API secret env 확인 | Codex |
 | 2026-03-01 | Push API 추가 | ✅ 전체 항목 확인 | mike |
 | 2026-02-22 | Blog API 추가 | ✅ 전체 항목 확인 | mike |
 | 2026-02-18 | Board API 추가 | ✅ 전체 항목 확인 | mike |

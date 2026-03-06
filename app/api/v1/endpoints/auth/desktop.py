@@ -5,7 +5,6 @@ from app.core.auth import get_strategy
 from app.domain.auth.services.auth_service import AuthService
 from app.core.database import get_db
 from app.api.v1.dependencies.api_key import verify_api_key
-from app.domain.auth.schemas.user import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth - Desktop"])
 
@@ -63,7 +62,7 @@ async def login_desktop(
     response_data = {
         "success": True,
         "message": "가입 완료! 10포인트 지급" if is_new else "로그인 성공",
-        "user": UserResponse.model_validate(user).model_dump(mode='json'),
+        "user": AuthService.serialize_user_response(user),
         "is_new_user": is_new,
     }
     return await strategy.build_response(response_data, session_data)

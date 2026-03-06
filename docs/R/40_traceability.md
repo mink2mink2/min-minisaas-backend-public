@@ -97,6 +97,7 @@
 | 2026-02-15 | Push API 엔드포인트 추가 | FCM 토큰 등록 화면 | ✅ 앱 v1.0에 반영됨 |
 | 2026-02-20 | Blog 구독 API 추가 | 블로그 구독 버튼 | ✅ 앱 v1.0에 반영됨 |
 | 2026-03-01 | 읽지 않은 알림 수 API | 탭바 뱃지 | ✅ 앱 v1.0에 반영됨 |
+| 2026-03-06 | Coin simulator API + `/auth/me.is_superuser` 확장 | `coint simulator` 메뉴와 제어 권한 UI | ✅ 앱 동시 반영 |
 
 ---
 
@@ -105,3 +106,13 @@
 - API 엔드포인트 추가/변경/삭제 시 이 매트릭스 반드시 갱신
 - 유저 스토리 변경 시 연관 테스트 케이스도 함께 검토
 - 관련 문서: [D/30_api_contract.md](../D/30_api_contract.md), [V/20_test_cases.md](../V/20_test_cases.md)
+
+---
+
+## COIN SIMULATOR 도메인
+
+| 유저 스토리 | API 엔드포인트 | 테스트 케이스 | 상태 |
+|------------|--------------|-------------|------|
+| US-CS01: 시뮬레이터 대시보드 조회 | `GET /api/v1/coin-simulator/dashboard` | TC-CS01-01 | ✅ 완료 |
+| US-CS02: superuser 시뮬레이터 제어 | `POST /api/v1/coin-simulator/start` | TC-CS02-01 | ✅ 완료 |
+| US-CS02: superuser 설정 저장 | `PUT /api/v1/coin-simulator/settings` | TC-CS02-02 | ✅ 완료 |

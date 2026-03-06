@@ -6,6 +6,8 @@ import string
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.domain.auth.models.user import User
+from app.domain.auth.schemas.user import UserResponse
+from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.core.cache import cache
 
@@ -15,6 +17,23 @@ class AuthService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def is_superuser_email(email: Optional[str]) -> bool:
+        if not email:
+            return False
+        normalized = email.strip().lower()
+        return normalized in {
+            item.strip().lower()
+            for item in settings.SUPERUSER_EMAILS
+            if isinstance(item, str) and item.strip()
+        }
+
+    @classmethod
+    def serialize_user_response(cls, user: User) -> dict:
+        payload = UserResponse.model_validate(user).model_dump(mode="json")
+        payload["is_superuser"] = cls.is_superuser_email(user.email)
+        return payload
 
     @staticmethod
     def _generate_random_nickname() -> str:

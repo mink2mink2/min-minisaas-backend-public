@@ -8,6 +8,7 @@ from app.api.v1.endpoints.pdf import pdf_router
 from app.api.v1.endpoints.points import router as points_router
 from app.api.v1.endpoints.ledger import router as ledger_router
 from app.api.v1.endpoints.push import router as push_router
+from app.api.v1.endpoints.coin_simulator import router as coin_simulator_router
 from app.api.v1.endpoints.users import router as users_router
 
 api_router = APIRouter()
@@ -38,3 +39,6 @@ api_router.include_router(ledger_router)
 
 # Push notification endpoints (tokens, notifications)
 api_router.include_router(push_router)
+
+# Coin simulator dashboard endpoints
+api_router.include_router(coin_simulator_router)

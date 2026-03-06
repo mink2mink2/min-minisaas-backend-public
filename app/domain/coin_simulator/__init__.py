@@ -1,0 +1,1 @@
+"""Coin simulator domain package."""

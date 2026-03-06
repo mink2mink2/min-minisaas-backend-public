@@ -51,6 +51,7 @@ class UserResponse(BaseModel):
     picture: Optional[str] = None
     points: int = 0
     is_active: bool = True
+    is_superuser: bool = False
 
     class Config:
         from_attributes = True

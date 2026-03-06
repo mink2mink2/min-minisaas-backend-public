@@ -260,6 +260,41 @@ HTTP를 통해 메시지를 전송한다 (WebSocket 폴백).
 
 ---
 
+## COIN SIMULATOR 도메인 `/api/v1/coin-simulator`
+
+### GET /api/v1/coin-simulator/dashboard
+시뮬레이터 상태/자산/포지션/최근 거래를 조회한다.
+Cloud Run API는 Redis 캐시를 우선 사용하고, 캐시 미스 시 로컬 코인 서버 API에서 최신 스냅샷을 가져온다.
+
+### POST /api/v1/coin-simulator/start
+superuser만 시뮬레이터를 시작할 수 있다.
+Cloud Run API가 로컬 코인 서버의 `/api/bot/start`를 호출한 뒤 캐시를 갱신한다.
+
+### POST /api/v1/coin-simulator/stop
+superuser만 시뮬레이터를 중지할 수 있다.
+Cloud Run API가 로컬 코인 서버의 `/api/bot/stop`을 호출한 뒤 캐시를 갱신한다.
+
+### PUT /api/v1/coin-simulator/settings
+superuser만 시뮬레이터 설정을 변경할 수 있다.
+Cloud Run API가 로컬 코인 서버의 전략 설정 API를 호출한 뒤 캐시를 갱신한다.
+
+**Request Body**:
+```json
+{
+  "mode": "paper",
+  "exchange": "binance",
+  "refresh_interval_seconds": 5,
+  "analysis_limit": 30,
+  "default_order_amount": 100.0,
+  "risk_per_trade_pct": 1.0,
+  "auto_stop_loss_pct": 2.0,
+  "auto_take_profit_pct": 3.0,
+  "enabled_strategies": ["bb_strategy"]
+}
+```
+
+---
+
 ### WS /api/v1/chat/ws/rooms/{room_id}
 실시간 채팅 WebSocket 연결.
 

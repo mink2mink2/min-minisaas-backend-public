@@ -251,3 +251,22 @@
 | P1 (중요) | US-BL04, US-BL07 | 블로그 구독 피드 |
 | P1 (중요) | US-P01, US-P04 | 알림 기본 기능 |
 | P2 (선택) | US-B06, US-B10 | 편의 기능 |
+| P1 (중요) | US-CS01, US-CS02 | 앱용 시뮬레이터 대시보드 |
+
+---
+
+## COIN SIMULATOR 도메인
+
+### US-CS01: 시뮬레이터 대시보드 조회
+**로그인한 사용자**로서 코인 시뮬레이터 상태와 거래 현황을 조회하고 싶다.
+
+- **트리거**: 앱 `coint simulator` 화면 진입
+- **결과**: 상태, 자산, 포지션, 최근 거래, 권한 정보 반환
+- **관련 API**: `GET /api/v1/coin-simulator/dashboard`
+
+### US-CS02: superuser 시뮬레이터 제어
+**superuser**로서 시뮬레이터를 시작/중지하고 설정을 변경하고 싶다.
+
+- **트리거**: 앱에서 Start/Stop 또는 설정 저장 버튼 탭
+- **제약**: 일반 사용자는 읽기 전용
+- **관련 API**: `POST /api/v1/coin-simulator/start`, `POST /api/v1/coin-simulator/stop`, `PUT /api/v1/coin-simulator/settings`
