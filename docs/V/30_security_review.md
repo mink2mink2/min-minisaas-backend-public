@@ -207,7 +207,7 @@ bandit -r app/ -ll
 python scripts/check_secrets.py
 
 # OWASP 의존성 체크 (선택)
-dependency-check --project minisaas --scan .
+dependency-check --project your-service --scan .
 ```
 
 ---

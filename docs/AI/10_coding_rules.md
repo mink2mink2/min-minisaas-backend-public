@@ -1,25 +1,19 @@
-# AI/10 — 코딩 규칙 (Coding Rules for AI)
+# AI/10 — 코딩 규칙 (Python / FastAPI)
 
-> 이 규칙들은 선택 사항이 아니다. 코드를 작성하기 전에 반드시 읽고 따른다.
-
----
-
-## 작업 시작 전 필수 확인
-
-1. `D/10_architecture.md`의 레이어 구조를 확인한다 — 내 변경사항이 어느 레이어인지 파악
-2. `AI/20_tasks_queue.md`에서 현재 우선순위 태스크를 확인한다
-3. `D/30_api_contract.md`에서 기존 API 계약을 확인한다 (중복 엔드포인트 추가 방지)
+이 규칙을 어기는 코드는 작성하지 않는다.
 
 ---
 
-## Rule 1: 레이어 역할 절대 준수
+## 레이어 규칙
 
-### routes/에 비즈니스 로직 작성 금지
+### API Layer (`app/api/v1/endpoints/`)
 
-`api/v1/endpoints/` 파일은 **HTTP 계약만 담당**한다.
+- HTTP 요청 파싱, Service 호출, 응답 반환만 담당
+- 비즈니스 로직 직접 작성 금지
+- DB 쿼리 직접 작성 금지 (Service Dependency Injection만)
 
 ```python
-# ✅ 올바른 패턴 — 서비스 호출만 함
+# ✅ 올바른 API 엔드포인트
 @router.post("/posts", response_model=PostResponse, status_code=201)
 async def create_post(
     data: PostCreate,
@@ -28,246 +22,229 @@ async def create_post(
 ):
     return await service.create_post(user_id=current_user.id, data=data)
 
-# ❌ 금지 패턴 — DB 쿼리가 라우터에 있음
+# ❌ 금지: 엔드포인트에서 DB 직접 쿼리
 @router.post("/posts")
 async def create_post(data: PostCreate, db: AsyncSession = Depends(get_db)):
-    post = BoardPost(**data.dict())
+    post = BoardPost(**data.dict())  # 금지: Service 없이 직접 저장
     db.add(post)
     await db.commit()
-    return post
 ```
 
-### middleware/에서만 횡단 관심사 처리
+### Domain Service (`app/domain/*/services.py`)
 
-- 인증 (`get_current_user`): `middleware/auth.py`
-- Rate Limiting: `middleware/rate_limit.py`
-- 새 횡단 관심사(로깅 미들웨어, 요청 ID 등)는 `middleware/` 신규 파일로 분리
-
-```python
-# ✅ 올바른 패턴 — middleware/auth.py에 인증 로직
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    payload = verify_jwt_token(token)
-    user = await db.get(User, int(payload["sub"]))
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
-# ❌ 금지 패턴 — 인증 로직이 라우터에 있음
-@router.get("/posts")
-async def list_posts(token: str = Header(None)):
-    payload = jwt.decode(token, SECRET, algorithms=["HS256"])  # 라우터에서 직접
-    ...
-```
-
----
-
-## Rule 2: FastAPI Depends()로 의존성 주입
-
-모든 의존성(DB, Service, 현재 사용자)은 `Depends()`를 통해 주입한다.
+- 도메인 비즈니스 로직, DB 쿼리, EventBus 발행 담당
+- `Request` 객체 직접 참조 금지
+- 다른 Domain의 Service를 직접 import 금지 → EventBus 사용
 
 ```python
-# ✅ 의존성 정의 패턴
-async def get_board_service(db: AsyncSession = Depends(get_db)) -> BoardService:
-    return BoardService(db)
-
-# ✅ 사용 패턴
-@router.get("/posts")
-async def list_posts(
-    service: BoardService = Depends(get_board_service),
-    current_user: User = Depends(get_current_user),
-    skip: int = 0,
-    limit: int = 20,
-):
-    return await service.list_posts(skip=skip, limit=limit)
-```
-
----
-
-## Rule 3: 도메인 간 직접 임포트 금지
-
-도메인 간 통신은 **반드시 EventBus를 통해** 처리한다.
-
-```python
-# ✅ 올바른 패턴 — EventBus로 간접 통신
-# domain/board/services.py
-from app.core.events import EventBus
-
+# ✅ Service에서 EventBus 발행
 class BoardService:
-    async def create_post(self, ...):
-        post = await self._create_in_db(...)
+    async def create_post(self, user_id: int, data: PostCreate) -> PostResponse:
+        post = BoardPost(author_id=user_id, **data.dict())
+        self.db.add(post)
+        await self.db.commit()
+        await self.db.refresh(post)
+
+        # 다른 도메인(push)은 이벤트로 통신
         await EventBus.publish("board.post.created", {
             "post_id": post.id,
             "author_id": post.author_id,
+            "title": post.title,
         })
-        return post
+        return PostResponse.from_orm(post)
 
-# domain/push/handlers.py (EventBus 핸들러)
-async def handle_board_post_created(payload: dict):
-    # push 도메인에서 직접 구독하여 처리
-    await push_service.create_notification(...)
+# ❌ 금지: Service에서 다른 도메인 Service 직접 import
+from app.domain.push.services import PushService  # 금지!
+```
 
-# ❌ 금지 패턴 — 도메인 간 직접 임포트
-# domain/board/services.py
-from app.domain.push.services import PushService  # 절대 금지!
+### Core Layer (`app/core/`)
 
-class BoardService:
-    async def create_post(self, ...):
-        post = await self._create_in_db(...)
-        push_service = PushService(self.db)
-        await push_service.create_notification(...)  # 강결합!
+- 기술적 인프라만 제공 (DB, Redis, EventBus, FCM, OAuth 검증)
+- 비즈니스 로직 포함 금지
+
+---
+
+## DDD 도메인 경계 규칙
+
+- 각 도메인은 자신의 `models.py`, `schemas.py`, `services.py`만 내부 사용
+- 도메인 간 직접 import 금지
+- 도메인 간 통신은 반드시 `EventBus.publish()` / `EventBus.subscribe()` 사용
+
+```python
+# ✅ 도메인 간 이벤트 통신
+# board/services.py
+await EventBus.publish("board.post.created", payload)
+
+# push/handlers.py
+EventBus.subscribe("board.post.created", handle_new_post_notification)
+
+# ❌ 금지: 도메인 간 직접 호출
+from app.domain.push.services import PushService
+await push_service.send_notification(...)  # 절대 금지!
 ```
 
 ---
 
-## Rule 4: 이벤트 발행 패턴
+## 비동기(async SQLAlchemy) 규칙
+
+- 모든 DB 쿼리는 `AsyncSession` 사용 (동기 Session 사용 금지)
+- `await db.execute(select(...))`, `await db.commit()`, `await db.refresh()` 패턴 사용
+- N+1 쿼리 방지: 관계 데이터 조회 시 `selectinload()` 또는 `joinedload()` 사용
 
 ```python
-# 이벤트 발행 표준 패턴
-from app.core.events import EventBus
+# ✅ 올바른 비동기 쿼리
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-await EventBus.publish("domain.entity.action", {
-    "entity_id": entity.id,
-    "actor_id": user.id,
-    # 핸들러에서 필요한 최소 정보만 포함
-})
+async def get_posts_with_author(db: AsyncSession):
+    result = await db.execute(
+        select(BoardPost)
+        .options(selectinload(BoardPost.author))  # N+1 방지
+        .order_by(BoardPost.created_at.desc())
+    )
+    return result.scalars().all()
 
-# 이벤트 이름 규칙: "domain.entity.action"
-# 예시:
-# "board.post.created"
-# "board.comment.created"
-# "blog.post.created"
-# "chat.message.received"
-# "auth.user.registered"
+# ❌ 금지: 동기 ORM 사용
+posts = db.query(BoardPost).all()  # 금지: 동기 쿼리
 ```
 
 ---
 
-## Rule 5: 새 기능 추가 절차
+## Pydantic v2 스키마 규칙
 
-### 새 도메인 추가 시
+- API 요청/응답은 반드시 Pydantic v2 스키마 정의
+- ORM 모델 직접 반환 금지 → `response_model` 스키마 사용
+- ORM → 스키마 변환: `model_config = ConfigDict(from_attributes=True)` 사용
 
-1. `domain/new_domain/` 디렉토리 생성
-2. `models.py` → `schemas.py` → `services.py` → `handlers.py` 순서로 작성
-3. `api/v1/endpoints/new_domain.py` 작성 (라우터만)
-4. `api/v1/router.py`에 라우터 등록
-5. Alembic 마이그레이션 생성 및 실행
-6. `core/events.py`에 필요한 이벤트 핸들러 등록
-7. `D/10_architecture.md` 업데이트
-8. `D/20_data_model.md` 업데이트
-9. `D/30_api_contract.md` 업데이트
+```python
+# ✅
+class PostResponse(BaseModel):
+    id: int
+    title: str
+    author_id: int
 
-### 새 엔드포인트 추가 시
+    model_config = ConfigDict(from_attributes=True)
 
-1. `D/30_api_contract.md`에 먼저 API 명세 작성
-2. `domain/*/services.py`에 비즈니스 로직 추가
-3. `api/v1/endpoints/*.py`에 라우터 핸들러 추가 (로직 없이 서비스 호출만)
-4. 테스트 케이스 작성 (Phase 2 패턴 참고)
-5. `R/40_traceability.md` 업데이트
-6. `I/20_change_log.md`에 변경 기록
+# ❌ ORM 모델 직접 반환
+@router.get("/posts")
+async def get_posts(db: AsyncSession = Depends(get_db)):
+    return await db.execute(select(BoardPost))  # 금지: ORM 객체 직접 반환
+```
 
 ---
 
-## Rule 6: 타입 힌트 필수
+## EventBus 규칙
 
-모든 함수에 입력/출력 타입 힌트를 작성한다.
+- 이벤트 이름은 `{domain}.{entity}.{action}` 형식 (예: `board.post.created`)
+- 이벤트 핸들러는 `app/domain/{domain}/handlers.py`에만 정의
+- 핸들러 등록은 `main.py`의 `startup()` 이벤트에서만
 
 ```python
-# ✅ 올바른 패턴
-async def create_post(
-    self,
-    user_id: int,
-    data: PostCreate,
-) -> PostResponse:
+# ✅ 핸들러 등록 위치 (main.py)
+@app.on_event("startup")
+async def startup():
+    register_push_handlers()  # domain/push/handlers.py
+
+# ✅ 핸들러 정의 (domain/push/handlers.py)
+def register_push_handlers():
+    EventBus.subscribe("board.post.created", handle_new_post_notification)
+    EventBus.subscribe("chat.message.received", handle_chat_notification)
+```
+
+---
+
+## 환경변수 규칙
+
+- 모든 설정은 `app/core/config.py`의 Pydantic BaseSettings에서 로딩
+- 코드에 DB URL, Redis URL, API 키, 비밀번호 하드코딩 절대 금지
+
+```python
+# ✅
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    REDIS_URL: str
+    SECRET_KEY: str
+    FIREBASE_CREDENTIALS_PATH: str
+    PRODUCTION: bool = False
+
+    model_config = ConfigDict(env_file=".env")
+
+settings = Settings()
+
+# ❌ 하드코딩
+DATABASE_URL = "postgresql://user:pass@localhost/db"  # 절대 금지
+```
+
+---
+
+## 인증 미들웨어 규칙
+
+- 인증이 필요한 엔드포인트는 `Depends(get_current_user)` 필수
+- `get_current_user`는 `app/middleware/auth.py`에서만 정의
+- JWT 토큰 검증 로직을 엔드포인트에 직접 작성 금지
+
+```python
+# ✅
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return UserResponse.from_orm(current_user)
+
+# ❌ 엔드포인트에서 직접 토큰 검증
+@router.get("/me")
+async def get_me(token: str = Header(...)):
+    payload = jwt.decode(token, SECRET_KEY, ...)  # 금지: 직접 검증
+```
+
+---
+
+## Rate Limiting 규칙
+
+- Rate Limiting은 SlowAPI 기반으로 `app/middleware/rate_limit.py`에서 설정
+- 민감한 엔드포인트(로그인, 게시글 작성)에는 반드시 Rate Limit 적용
+
+---
+
+## 오류 처리 규칙
+
+- 비즈니스 예외는 `app/core/exceptions.py`의 커스텀 예외 사용
+- `except:` bare except 절대 금지 → 구체적 예외 타입 명시
+- 오류 응답 형식은 통일: `{"success": false, "error_code": "...", "message": "..."}`
+
+```python
+# ✅
+try:
+    user = await db.get(User, user_id)
+    if not user:
+        raise UserNotFoundError(f"User {user_id} not found")
+except SQLAlchemyError as e:
+    logger.error(f"DB 오류: {e}")
+    raise DatabaseError("데이터베이스 오류가 발생했습니다")
+
+# ❌
+try:
     ...
-
-# ❌ 금지 패턴
-async def create_post(self, user_id, data):
-    ...
+except:  # 금지: bare except
+    pass
 ```
 
 ---
 
-## Rule 7: 에러 처리 패턴
+## 코드 품질 규칙
 
-```python
-# ✅ 표준 에러 처리 패턴
-from fastapi import HTTPException
-
-class BoardService:
-    async def get_post(self, post_id: int) -> BoardPost:
-        post = await self.db.get(BoardPost, post_id)
-        if not post or post.is_deleted:
-            raise HTTPException(status_code=404, detail="Post not found")
-        return post
-
-    async def update_post(self, user_id: int, post_id: int, data: PostUpdate) -> PostResponse:
-        post = await self.get_post(post_id)
-        if post.author_id != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to update this post")
-        # 수정 로직...
-```
-
----
-
-## Rule 8: 테스트 없이 PR 금지
-
-- 새 서비스 메서드: Phase 1 패턴의 단위 테스트 작성
-- 새 엔드포인트: Phase 2 패턴의 API 테스트 작성
-- 테스트가 통과하지 않으면 완료로 처리하지 않는다
+- Black 포매터, isort, flake8 모두 통과해야 함
+- 변경 후 반드시 확인: `make check`
+- 민감 정보(비밀번호, API 키, 토큰)를 `logger.info/error()`에 포함 금지
 
 ```bash
-# 테스트 실행 확인
-pytest tests/ -v -x --asyncio-mode=auto
-# 모든 테스트 통과 확인 후 PR
+# ✅ 변경 후 필수 확인
+make check    # black, isort, flake8, pylint
+pytest tests/ # 전체 테스트 통과
 ```
 
 ---
 
-## Rule 9: V/30_security_review.md 체크 후 PR
+## 빌드/배포 규칙
 
-보안 관련 사항이 있는 경우 반드시 체크리스트를 확인한다:
-- 새 공개 엔드포인트 추가 시
-- 인증 로직 변경 시
-- DB 쿼리 변경 시
-- 외부 API 연동 추가 시
-
----
-
-## Rule 10: 코드 스타일
-
-```bash
-# 커밋 전 실행
-black app/ tests/       # 코드 포맷팅
-isort app/ tests/       # import 정렬
-ruff check app/ tests/  # 린터 검사
-
-# 또는 pre-commit hook
-pre-commit run --all-files
-```
-
-### 네이밍 규칙
-
-| 대상 | 규칙 | 예시 |
-|------|------|------|
-| 파일명 | snake_case | `board_service.py` |
-| 클래스명 | PascalCase | `BoardService`, `PostCreate` |
-| 함수/변수 | snake_case | `create_post`, `user_id` |
-| 상수 | UPPER_SNAKE | `MAX_CONTENT_LENGTH` |
-| 이벤트 이름 | `domain.entity.action` | `board.post.created` |
-| API 엔드포인트 | `/resource/{id}/action` | `/board/posts/{id}/like` |
-
----
-
-## 빠른 참조
-
-| 질문 | 참조 문서 |
-|------|---------|
-| "이게 어느 레이어인가?" | [D/10_architecture.md](../D/10_architecture.md) |
-| "이 API 이미 있나?" | [D/30_api_contract.md](../D/30_api_contract.md) |
-| "테스트는 어떻게 작성하나?" | [V/20_test_cases.md](../V/20_test_cases.md) |
-| "보안 체크는?" | [V/30_security_review.md](../V/30_security_review.md) |
-| "DB 스키마는?" | [D/20_data_model.md](../D/20_data_model.md) |
-| "컨텍스트 팩" | [AI/30_context_pack.md](30_context_pack.md) |
+- 변경 후 Docker 빌드 확인: `docker compose up -d --build`
+- Alembic 마이그레이션 생성 후 반드시 검토: `alembic revision --autogenerate -m "..."`
+- Production 배포 전 `make setup` (bootstrap + migrate + verify) 실행

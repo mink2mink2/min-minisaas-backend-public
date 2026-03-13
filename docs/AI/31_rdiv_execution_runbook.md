@@ -1,182 +1,156 @@
-# AI/31 — RDIV 실행 런북 (Execution Runbook)
+# AI/31 — RDIV 실행 Runbook
 
-> AI 작업 시작 시 이 런북을 기준으로 문서 + 코드 + 검증까지 완료한다.
-> **기본 지시문**: `README.md를 먼저 읽고, README에 적힌 Start Here/Default Instruction대로 /docs/AI/31_rdiv_execution_runbook.md 기준으로 문서+코드+검증까지 완료해.`
-
----
-
-## 0. 작업 시작 전 필독
-
-1. `docs/README.md` → DoD, Architecture Rules 확인
-2. `docs/AI/20_tasks_queue.md` → 현재 태스크 우선순위 확인
-3. `docs/AI/30_context_pack.md` → 프로젝트 상태 및 패턴 확인
+> 모든 작업은 이 순서를 따른다. 예외 없음.
 
 ---
 
-## 1. R — 요구사항 확인 (Requirements)
+## Step 0: 컨텍스트 로드
 
-작업 전 반드시 확인:
+작업 시작 전 반드시 아래 순서로 읽는다:
 
-```
-docs/R/00_overview.md          # 프로젝트 범위/목적
-docs/R/10_user_stories.md      # 관련 유저 스토리 확인
-docs/R/20_acceptance_criteria.md  # 인수 조건 확인
-docs/R/40_traceability.md      # 기존 API↔테스트 연결 확인
-```
-
-**변경 발생 시**: 새 요구사항이면 `R/10_user_stories.md`에 추가.
+1. `docs/README.md` — 전체 규칙, DoD, Architecture Rules
+2. `docs/AI/00_project_brief.md` — 프로젝트 현황 (도메인 구성, 기술 부채)
+3. `docs/AI/10_coding_rules.md` — 코딩 규칙 (DDD, EventBus, async SQLAlchemy)
+4. `docs/AI/20_tasks_queue.md` — 현재 작업 확인
+5. 작업 관련 `D/` 문서 — API 계약, 데이터 모델, 이벤트 목록
 
 ---
 
-## 2. D — 설계 확인 및 갱신 (Design)
+## Step 1: R (Requirements 확인)
 
-### 아키텍처 레이어 확인 (필수)
-
-`docs/D/10_architecture.md`의 레이어 구조 반드시 확인:
-
-| 레이어 | 위치 | 금지 사항 |
-|--------|------|---------|
-| HTTP 계약 | `api/v1/endpoints/` | 비즈니스 로직 직접 작성 금지 |
-| 비즈니스 로직 | `domain/*/services.py` | HTTP 코드 (Request/Response) 직접 사용 금지 |
-| 인프라 | `core/` | 도메인 비즈니스 로직 포함 금지 |
-| 횡단 관심사 | `middleware/` | 도메인 종속 로직 포함 금지 |
-
-### API 변경 시
-
-```
-docs/D/30_api_contract.md 갱신 필수
-docs/D/90_decisions.md에 변경 이유 기록 (파괴적 변경의 경우)
-docs/R/40_traceability.md 매트릭스 갱신
-```
-
-### DB 스키마 변경 시
-
-```
-1. alembic revision --autogenerate -m "변경 설명"
-2. 마이그레이션 파일 검토 (autogenerate 오류 가능성)
-3. docs/D/20_data_model.md 갱신
-```
+- 작업이 기존 유저 스토리(`R/10_user_stories.md`)에 해당하는가?
+- 새 요구사항이면 `R/10_user_stories.md`에 추가
+- 새 도메인 기능이면 `R/20_feature_spec.md`에 스펙 먼저 정의
 
 ---
 
-## 3. I — 구현 (Implementation)
+## Step 2: D (Design 갱신 — 코드 작성 전)
 
-### 새 기능 추가 체크리스트
+코드보다 문서를 먼저 갱신한다.
 
-```
-[ ] 어느 레이어/도메인에 속하는지 판단
-[ ] domain/{feature}/ 아래 독립 파일로 생성
-    - models.py: ORM 모델
-    - schemas.py: Pydantic 스키마
-    - services.py: 비즈니스 로직
-    - handlers.py: EventBus 핸들러 (필요시)
-[ ] api/v1/endpoints/{domain}.py에 라우터 추가
-[ ] Depends()로 의존성 주입 (직접 객체 생성 금지)
-[ ] Rate Limiting 적용 여부 검토 (공개 엔드포인트)
-[ ] 이벤트 발행 추가 (다른 도메인에 알림 필요한 경우)
-[ ] docs/I/20_change_log.md 갱신
-```
-
-### 코딩 규칙 (AI/10_coding_rules.md 참고)
-
-```python
-# ✅ 올바른 패턴
-@router.post("/posts")
-async def create_post(
-    data: PostCreate,
-    service: BoardService = Depends(get_board_service),  # 의존성 주입
-    user: User = Depends(get_current_user),
-):
-    return await service.create_post(user.id, data)
-
-# ❌ 잘못된 패턴 (라우터에 비즈니스 로직 작성)
-@router.post("/posts")
-async def create_post(data: PostCreate, db: AsyncSession = Depends(get_db)):
-    post = BoardPost(**data.dict())  # ❌ 비즈니스 로직을 라우터에 작성
-    db.add(post)
-    await db.commit()
-    return post
-```
+- REST API 변경 → `D/30_api_contract.md` 먼저 갱신
+- DB 모델 변경 → `D/20_data_model.md` 먼저 갱신
+- 새 이벤트 추가 → `D/10_architecture.md` 이벤트 목록 갱신
+- 아키텍처 결정 → `D/90_decisions.md`에 ADR 추가
 
 ---
 
-## 4. V — 검증 (Verification)
+## Step 3: I (Implementation)
 
-### 보안 체크 (코드 변경 시 필수)
+### 3.1 코드 작성 체크리스트
 
-`docs/V/30_security_review.md` 체크리스트 확인:
+- [ ] `docs/AI/10_coding_rules.md` 규칙 준수
+- [ ] API 레이어에 비즈니스 로직 없음 (Service 위임만)
+- [ ] Domain 간 직접 import 없음 (EventBus 사용)
+- [ ] 모든 DB 쿼리는 `AsyncSession` 비동기 패턴
+- [ ] N+1 쿼리 방지 (`selectinload` 적용 확인)
+- [ ] 환경변수 하드코딩 없음 (`app/core/config.py` 사용)
+- [ ] 새 엔드포인트에 `Depends(get_current_user)` 인증 적용
+- [ ] 민감 정보 로그 출력 없음
+- [ ] bare except 없음
+
+### 3.2 새 도메인 추가 시 체크리스트
 
 ```
-[ ] 새 공개 엔드포인트에 Rate Limiting 적용됨
-[ ] 민감정보 로그 출력 없음 (토큰, DB URL 등)
-[ ] SQL Injection 방지 (ORM 사용, raw query 최소화)
-[ ] JWT 검증 우회 경로 없음
-[ ] Production에서 /docs, /redoc 비활성화 유지
+app/domain/{feature}/
+├── models.py     ← 1. ORM 모델 먼저
+├── schemas.py    ← 2. Pydantic 스키마
+├── services.py   ← 3. 비즈니스 로직
+└── handlers.py   ← 4. EventBus 핸들러 (필요 시)
 ```
 
-### 테스트 작성 및 실행
+- `app/api/v1/endpoints/{feature}.py` — 엔드포인트 추가
+- `app/api/v1/router.py` — 라우터 등록
+- `app/main.py` — startup()에 핸들러 등록
+- Alembic 마이그레이션 생성 및 검토
+
+### 3.3 Alembic 마이그레이션
 
 ```bash
-# 1. 새 기능에 대한 테스트 작성
-# tests/unit/domain/{feature}/test_{feature}_service.py
-# tests/api/test_{feature}_endpoints.py
+# 마이그레이션 생성
+alembic revision --autogenerate -m "add_{feature}_tables"
 
-# 2. 테스트 실행
-pytest tests/ -v
-
-# 3. 결과 기록
-# docs/V/20_test_cases.md에 새 테스트 케이스 추가
-```
-
-**규칙**: 테스트 없이 완료 처리 금지.
-
----
-
-## 5. 문서 동시 갱신 (DoD)
-
-작업 완료 전 반드시 갱신:
-
-```
-[ ] R/40_traceability.md — API 추가/변경 시
-[ ] D/30_api_contract.md — API 계약 변경 시
-[ ] D/20_data_model.md — DB 스키마 변경 시
-[ ] D/90_decisions.md — 아키텍처 결정 변경 시
-[ ] I/10_implementation_plan.md — 태스크 완료 시
-[ ] I/20_change_log.md — 모든 변경 시
-[ ] V/20_test_cases.md — 테스트 추가 시
-[ ] AI/20_tasks_queue.md — 태스크 상태 변경 시
-```
-
----
-
-## 6. DoD 최종 체크
-
-```
-[ ] 모든 테스트 통과 (pytest 결과 확인)
-[ ] V/30_security_review.md 체크리스트 통과
-[ ] R/D/I/V 문서 동시 갱신 완료
-[ ] API 계약 변경 시 앱 팀에 전달 (D/30_api_contract.md)
-[ ] change_log.md 갱신 완료
-```
-
----
-
-## 빠른 참조 명령어
-
-```bash
-# 서버 실행
-uvicorn app.main:app --reload --port 8000
-
-# 테스트 전체
-pytest tests/ -v
-
-# 마이그레이션
+# 생성된 마이그레이션 파일 반드시 검토 후 적용
 alembic upgrade head
-
-# 보안 검사
-bash scripts/verify_no_secrets.sh
-
-# 린터
-ruff check app/
-black --check app/
 ```
+
+### 3.4 빌드 확인
+
+```bash
+cd /path/to/min-minisaas-backend
+
+# 코드 품질 검사 (모두 통과 필수)
+make check    # black, isort, flake8, pylint
+
+# 전체 테스트
+pytest tests/ -v
+
+# Docker 빌드
+docker compose up -d --build
+```
+
+빌드 또는 테스트 실패 시 → 수정 후 재확인. 완료 전까지 다음 단계 진행 금지.
+
+### 3.5 구현 현황 갱신
+
+- `I/10_implementation_plan.md` 해당 항목 체크
+- `I/20_change_log.md` 변경 내용 기록
+
+---
+
+## Step 4: V (Verification)
+
+### 4.1 보안 체크
+
+`V/30_security_review.md` 관련 항목 확인:
+- 새 엔드포인트에 JWT 인증이 적용됐는가?
+- 민감 정보가 로그에 출력되지 않는가?
+- Rate Limiting이 민감한 엔드포인트에 적용됐는가?
+- 환경변수 외부 노출이 없는가?
+
+### 4.2 기능 테스트
+
+```bash
+# 전체 테스트
+pytest tests/ -v
+
+# 특정 도메인 테스트
+pytest tests/test_board_endpoints.py -v
+pytest tests/test_auth_endpoints.py -v
+pytest tests/test_chat_endpoints.py -v
+
+# 헬스체크
+curl http://localhost:8000/health
+```
+
+### 4.3 EventBus 이벤트 흐름 확인
+
+새 이벤트 추가 시:
+```bash
+# 이벤트 발행 확인 (로그에서)
+# 예: board.post.created 발행 → push 핸들러 수신 확인
+pytest tests/test_event_handlers.py -v
+```
+
+---
+
+## Step 5: 완료 처리
+
+- [ ] `AI/20_tasks_queue.md`에서 작업 ✅ 표시
+- [ ] DoD 체크리스트 모두 통과 확인 (`docs/README.md` 참고)
+
+---
+
+## 금지 사항
+
+- 문서 갱신 없이 코드만 변경하는 것
+- API 레이어에 비즈니스 로직 직접 작성
+- Domain 간 직접 import (EventBus 사용)
+- 동기 SQLAlchemy 쿼리 (`db.query()` 사용 금지)
+- 환경변수 코드 하드코딩
+- `except:` bare except 사용
+- 인증 필요 엔드포인트에 `Depends(get_current_user)` 누락
+- `make check` 실패 상태로 완료 처리
+- 테스트 없이 새 기능 완료 처리
+- Docker 빌드 확인 없이 완료 처리
+- Alembic 마이그레이션 검토 없이 그대로 적용

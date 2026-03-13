@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 env:
-  GCP_PROJECT_ID: min-minisaas-487110
-  GCP_REGION: asia-northeast1
-  SERVICE_NAME: min-minisaas-backend
-  REGISTRY_HOSTNAME: asia-northeast1-docker.pkg.dev
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: your-gcp-region
+  SERVICE_NAME: your-service-name
+  REGISTRY_HOSTNAME: your-region-docker.pkg.dev
 
 jobs:
   deploy:
@@ -67,7 +67,7 @@ jobs:
             --max-instances=100 \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest,SECRET_KEY=SECRET_KEY:latest,API_SECRET_KEY=API_SECRET_KEY:latest,FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,KAKAO_REST_API_KEY=KAKAO_REST_API_KEY:latest,NAVER_CLIENT_ID=NAVER_CLIENT_ID:latest,NAVER_CLIENT_SECRET=NAVER_CLIENT_SECRET:latest,MINIO_ENDPOINT=MINIO_ENDPOINT:latest,MINIO_ACCESS_KEY=MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=MINIO_SECRET_KEY:latest,MINIO_SECURE=MINIO_SECURE:latest" \
             --set-env-vars="ENVIRONMENT=production,BCRYPT_ROUNDS=12,ACCESS_TOKEN_EXPIRE_MINUTES=15,REFRESH_TOKEN_EXPIRE_DAYS=7,SESSION_TTL_MIN=30,COOKIE_SECURE=true,COOKIE_SAMESITE=lax,DESKTOP_ACCESS_EXPIRE_MINUTES=60,DESKTOP_REFRESH_EXPIRE_DAYS=30,DEVICE_ACCESS_EXPIRE_HOURS=24,DEVICE_REFRESH_EXPIRE_DAYS=90,FIREBASE_JWKS_URI=https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com" \
-            --service-account=min-minisaas-backend-ci@min-minisaas-487110.iam.gserviceaccount.com
+            --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Get Cloud Run URL
         run: |

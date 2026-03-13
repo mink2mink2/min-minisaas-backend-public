@@ -144,4 +144,6 @@ Thumbs.db
 secrets/
 *.key
 *.pem
+config/firebase-adminsdk.json
+config/firebase-adminsdk*.json
 app/temp/
