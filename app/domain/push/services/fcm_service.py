@@ -1,7 +1,7 @@
 """FCM (Firebase Cloud Messaging) 서비스"""
 from typing import List, Dict, Optional
 from firebase_admin import messaging
-from app.core.fcm import get_fcm_client
+from app.core.fcm import initialize_firebase
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,6 +9,14 @@ logger = logging.getLogger(__name__)
 
 class FcmService:
     """Firebase Cloud Messaging 서비스"""
+
+    @staticmethod
+    def _mask_token(token: str) -> str:
+        if not token:
+            return "<empty>"
+        if len(token) <= 10:
+            return "***"
+        return f"{token[:6]}...{token[-4:]}"
 
     @staticmethod
     async def send_to_token(
@@ -28,8 +36,9 @@ class FcmService:
         Returns:
             메시지 ID (성공 시) 또는 None (실패 시)
         """
+        masked = FcmService._mask_token(token)
         try:
-            client = get_fcm_client()
+            initialize_firebase()
 
             message = messaging.Message(
                 notification=messaging.Notification(title=title, body=body),
@@ -37,12 +46,12 @@ class FcmService:
                 token=token,
             )
 
-            response = client.send(message)
-            logger.info(f"FCM message sent to {token}: {response}")
+            response = messaging.send(message)
+            logger.info(f"FCM message sent to {masked}: {response}")
             return response
 
         except Exception as e:
-            logger.error(f"Failed to send FCM message to {token}: {str(e)}")
+            logger.error(f"Failed to send FCM message to {masked}: {str(e)}")
             return None
 
     @staticmethod
@@ -66,28 +75,39 @@ class FcmService:
         if not tokens:
             return {"success": 0, "failure": 0, "message_ids": []}
 
+        message_ids = []
+        success_count = 0
+        failure_count = 0
+
         try:
-            client = get_fcm_client()
+            initialize_firebase()
 
-            message = messaging.MulticastMessage(
-                notification=messaging.Notification(title=title, body=body),
-                data=data or {},
-                tokens=tokens,
-            )
-
-            response = client.send_multicast(message)
+            for token in tokens:
+                message = messaging.Message(
+                    notification=messaging.Notification(title=title, body=body),
+                    data=data or {},
+                    token=token,
+                )
+                try:
+                    message_id = messaging.send(message)
+                    message_ids.append(message_id)
+                    success_count += 1
+                except Exception as send_error:
+                    failure_count += 1
+                    logger.error(
+                        "Failed to send FCM message to %s: %s",
+                        FcmService._mask_token(token),
+                        send_error,
+                    )
 
             result = {
-                "success": response.success_count,
-                "failure": response.failure_count,
-                "message_ids": [
-                    resp.message_id for resp in response.responses if resp.success
-                ],
+                "success": success_count,
+                "failure": failure_count,
+                "message_ids": message_ids,
             }
-
             logger.info(
                 f"FCM multicast sent to {len(tokens)} users: "
-                f"success={response.success_count}, failure={response.failure_count}"
+                f"success={success_count}, failure={failure_count}"
             )
             return result
 
@@ -114,7 +134,7 @@ class FcmService:
             메시지 ID (성공 시) 또는 None (실패 시)
         """
         try:
-            client = get_fcm_client()
+            initialize_firebase()
 
             message = messaging.Message(
                 notification=messaging.Notification(title=title, body=body),
@@ -122,7 +142,7 @@ class FcmService:
                 topic=topic,
             )
 
-            response = client.send(message)
+            response = messaging.send(message)
             logger.info(f"FCM message sent to topic {topic}: {response}")
             return response
 
@@ -142,9 +162,8 @@ class FcmService:
             성공 여부
         """
         try:
-            client = get_fcm_client()
-            # Firebase Admin SDK의 subscribe_to_topic 직접 사용
-            client.subscribe_to_topic(tokens, topic)
+            initialize_firebase()
+            messaging.subscribe_to_topic(tokens, topic)
             logger.info(f"Subscribed {len(tokens)} tokens to topic {topic}")
             return True
 
@@ -164,9 +183,8 @@ class FcmService:
             성공 여부
         """
         try:
-            client = get_fcm_client()
-            # Firebase Admin SDK의 unsubscribe_from_topic 직접 사용
-            client.unsubscribe_from_topic(tokens, topic)
+            initialize_firebase()
+            messaging.unsubscribe_from_topic(tokens, topic)
             logger.info(f"Unsubscribed {len(tokens)} tokens from topic {topic}")
             return True
 

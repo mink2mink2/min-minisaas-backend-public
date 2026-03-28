@@ -219,3 +219,10 @@
 | 공개 엔드포인트 분당 60회 초과 | HTTP 429, `Retry-After` 헤더 포함 |
 | 게시글 작성 분당 10회 초과 | HTTP 429 |
 | 댓글 작성 초당 1회 초과 | HTTP 429 |
+
+### DB 스키마 안전성
+
+| # | 조건 | 기대 결과 |
+|---|------|----------|
+| 1 | Alembic metadata 구성 시 운영 DB에 이미 존재하는 도메인 모델이 registry에서 누락되지 않음 | `alembic check`/`autogenerate`가 기존 테이블을 삭제 대상으로 오인하지 않음 |
+| 2 | `BaseModel` 공통 컬럼(`updated_at`, `is_deleted`)을 기대하는 모델이 운영/개발 DB와 불일치 | 차이는 수동 Alembic migration으로 보정되고 `upgrade head`가 재실행 가능하게 동작 |

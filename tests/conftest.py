@@ -172,28 +172,28 @@ def client(mock_cache, mock_dependencies, monkeypatch):
         mock_token.created_at = datetime.utcnow()
         return mock_token
 
-    async def mock_update_token(self, user_id, token, platform=None):
+    async def mock_update_token(self, user_id, token_id, platform=None, device_name=None):
         """Mock update token"""
         mock_token = MagicMock()
-        mock_token.id = str(uuid4())
-        mock_token.token = token
+        mock_token.id = token_id
+        mock_token.token = f"updated_token_{token_id}"
         mock_token.platform = platform or "android"
-        mock_token.device_name = None
+        mock_token.device_name = device_name
         mock_token.is_active = True
         mock_token.created_at = datetime.utcnow()
         return mock_token
 
-    async def mock_remove_token(self, token):
+    async def mock_remove_token(self, user_id, token):
         """Mock remove token - returns False for non-existent tokens"""
         if "non_existent" in token or "invalid" in token:
             return False
         return True
 
-    async def mock_mark_as_read(self, notification_id):
+    async def mock_mark_as_read(self, user_id, notification_id):
         """Mock mark as read"""
         return True
 
-    async def mock_delete_notification(self, notification_id):
+    async def mock_delete_notification(self, user_id, notification_id):
         """Mock delete notification"""
         return True
 

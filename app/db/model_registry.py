@@ -20,8 +20,18 @@ from app.domain.board.models.like_bookmark import PostLike, PostBookmark, Commen
 from app.domain.chat.models.room import ChatRoom, ChatRoomMember  # noqa: F401
 from app.domain.chat.models.message import ChatMessage  # noqa: F401
 
+# Blog Domain models
+from app.domain.blog.models.category import BlogCategory  # noqa: F401
+from app.domain.blog.models.post import BlogPost  # noqa: F401
+from app.domain.blog.models.like import BlogLike  # noqa: F401
+from app.domain.blog.models.subscription import BlogSubscription  # noqa: F401
+
 # PDF Domain models
 from app.domain.pdf.models.pdf_file import PDFFile  # noqa: F401
+
+# Push Domain models
+from app.domain.push.models.fcm_token import FcmToken  # noqa: F401
+from app.domain.push.models.push_notification import PushNotification  # noqa: F401
 
 
 __all__ = [
@@ -41,5 +51,11 @@ __all__ = [
     "ChatRoom",
     "ChatRoomMember",
     "ChatMessage",
+    "BlogCategory",
+    "BlogPost",
+    "BlogLike",
+    "BlogSubscription",
     "PDFFile",
+    "FcmToken",
+    "PushNotification",
 ]

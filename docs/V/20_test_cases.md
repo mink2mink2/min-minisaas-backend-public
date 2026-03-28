@@ -258,6 +258,39 @@ from unittest.mock import patch, AsyncMock
 @pytest.mark.phase2
 async def test_google_login_success(client):
     """Google 로그인 — 유효한 토큰 → 200 + JWT 반환"""
+
+---
+
+## Schema / Migration Verification
+
+### TC-DB-01: model registry 완전성 확인
+- 목적: Alembic metadata가 실제 운영 대상 모델을 모두 포함하는지 확인
+- 절차:
+  1. `app/db/model_registry.py`에 대상 도메인 모델 import 존재 여부 확인
+  2. `.venv/bin/python -c "import app.db.model_registry; from app.core.database import Base; print(sorted(Base.metadata.tables.keys()))"` 실행
+  3. 운영/개발 DB에 이미 존재하는 핵심 테이블(`blog_*`, `fcm_tokens`, `push_notifications`)이 metadata에 포함되는지 확인
+- 기대 결과:
+  - 기존 테이블이 metadata에 모두 존재
+  - `alembic check`에서 해당 테이블이 `remove_table`로 보고되지 않음
+
+### TC-DB-02: `fcm_tokens` BaseModel 컬럼 보정 migration
+- 목적: `20260328_0012_fcm_tokens_basemodel_columns`가 개발/운영 DB에서 재실행 가능하게 동작하는지 확인
+- 절차:
+  1. `.venv/bin/alembic upgrade head` 실행
+  2. `alembic current`가 `20260328_0012 (head)`인지 확인
+  3. `information_schema.columns`에서 `fcm_tokens.is_deleted` 존재 및 `NOT NULL` 여부 확인
+- 기대 결과:
+  - migration이 오류 없이 적용됨
+  - `fcm_tokens.is_deleted`가 존재하고 `NOT NULL` 상태임
+
+### TC-DB-03: `push_notifications` BaseModel 컬럼 보정 regression
+- 목적: `push_notifications.updated_at/is_deleted` 보정 상태가 유지되는지 확인
+- 절차:
+  1. `.venv/bin/alembic upgrade head` 실행
+  2. `information_schema.columns`에서 `push_notifications.updated_at`, `push_notifications.is_deleted` 존재 여부 확인
+- 기대 결과:
+  - 두 컬럼이 모두 존재
+  - ORM이 `BaseModel` 공통 컬럼 참조 시 런타임 오류가 발생하지 않음
     mock_user_info = {
         "uid": "google_123",
         "email": "user@gmail.com",
@@ -504,306 +537,232 @@ assert response.json()["permissions"]["can_configure"] is True
 
 ---
 
-# PDF 기능 통합 검증 체크리스트
+## 2026-03-18 보안 회귀 테스트
 
-작성일: 2026-03-04
-
-## ✅ Backend 변경사항 확인
-
-### 파일 1: `app/api/v1/endpoints/pdf/files.py`
-- [x] FileStatus import 추가 (라인 11)
-- [x] upload_pdf 함수에서 UPLOADING → UPLOADED 전환 추가 (라인 137-142)
-
-**검증 명령:**
-```bash
-grep -n "FileStatus.UPLOADED" app/api/v1/endpoints/pdf/files.py
+### TC-L01-01: 일반 사용자는 일일 원장을 생성할 수 없다
+```python
+response = client.post(
+    "/api/v1/verify/generate-daily/2026-03-18",
+    headers={"X-API-Key": "test_key", "X-Platform": "web"},
+)
+assert response.status_code == 403
 ```
 
----
-
-### 파일 2: `app/api/v1/endpoints/pdf/convert.py`
-
-#### 2-1. Import 확인
-- [x] PointService import (라인 15)
-- [x] InsufficientPointsError import (라인 15)
-- [x] StreamingResponse import (라인 7)
-- [x] quote import (라인 5)
-
-**검증 명령:**
-```bash
-grep -n "from app.domain.points.services" app/api/v1/endpoints/pdf/convert.py
-grep -n "from urllib.parse import quote" app/api/v1/endpoints/pdf/convert.py
-grep -n "StreamingResponse" app/api/v1/endpoints/pdf/convert.py
+### TC-L01-02: superuser는 일일 원장을 생성할 수 있다
+```python
+response = client.post(
+    "/api/v1/verify/generate-daily/2026-03-18",
+    headers={"X-API-Key": "test_key", "X-Platform": "web"},
+)
+assert response.status_code == 200
+assert response.json()["status"] == "success"
 ```
 
-#### 2-2. 포인트 잔액 확인
-- [x] CONVERSION_COST = 10 상수 (라인 25)
-- [x] request_pdf_conversion()에 포인트 잔액 확인 코드 (라인 237-244)
-
-**검증 명령:**
-```bash
-grep -n "CONVERSION_COST = 10" app/api/v1/endpoints/pdf/convert.py
-grep -n "402" app/api/v1/endpoints/pdf/convert.py
+### TC-L01-03: 시스템 원장 검증 조회는 인증이 없으면 거부된다
+```python
+assert client.get("/api/v1/verify/integrity/2026-03-18").status_code in [401, 422]
+assert client.get("/api/v1/verify/root/2026-03-18").status_code in [401, 422]
+assert client.get("/api/v1/verify/today").status_code in [401, 422]
 ```
 
-#### 2-3. 포인트 실제 차감
-- [x] convert_pdf_background()에서 PointService.consume() 호출 (라인 141-147)
-- [x] 예외 처리 (라인 148-155)
-- [x] idempotency_key 사용 (라인 146)
-
-**검증 명령:**
-```bash
-grep -n "point_service.consume" app/api/v1/endpoints/pdf/convert.py
-grep -n "idempotency_key" app/api/v1/endpoints/pdf/convert.py
+### TC-L01-04: 인증된 사용자는 시스템 원장 검증 조회를 수행할 수 있다
+```python
+response = client.get(
+    "/api/v1/verify/root/2026-03-18",
+    headers={"X-API-Key": "test_key", "X-Platform": "web"},
+)
+assert response.status_code == 200
+assert "system_hash" in response.json()
 ```
 
-#### 2-4. 다운로드 엔드포인트
-- [x] @router.get("/{file_id}/download") 엔드포인트 추가 (라인 313)
-- [x] StreamingResponse 반환 (라인 377)
-- [x] 파일 소유권 검증 (라인 342)
-- [x] 상태 검증 (라인 346)
-
-**검증 명령:**
-```bash
-grep -n "download_converted_csv" app/api/v1/endpoints/pdf/convert.py
-wc -l app/api/v1/endpoints/pdf/convert.py
+### TC-B01-04: board 목록 조회는 인증이 없으면 거부된다
+```python
+response = client.get(
+    "/api/v1/board/posts",
+    headers={"X-API-Key": "test_key"},
+)
+assert response.status_code in [401, 422]
 ```
 
----
-
-## ✅ Flutter 파일 생성 확인
-
-### 생성된 파일 목록
-
-```bash
-ls -lh flutter-pdf-code/
+### TC-B01-05: board 목록 조회는 인증 사용자의 user_id를 서비스로 전달한다
+```python
+response = client.get(
+    "/api/v1/board/posts",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer test-token"},
+)
+assert response.status_code == 200
+assert captured["user_id"] is not None
 ```
 
-필요한 파일:
-- [x] `flutter-pdf-code/pdf_models.dart` (3.0 KB)
-- [x] `flutter-pdf-code/pdf_service.dart` (5.5 KB)
-- [x] `flutter-pdf-code/pdf_providers.dart` (8.1 KB)
-
-### 파일 내용 검증
-
-**pdf_models.dart:**
-- [x] PdfFile 클래스
-- [x] PdfConversionStatus 클래스
-- [x] fromJson() 메서드
-
-**pdf_service.dart:**
-- [x] uploadPdf() 메서드
-- [x] requestConversion() 메서드
-- [x] getStatus() 메서드
-- [x] getUserFiles() 메서드
-- [x] downloadCsv() 메서드
-- [x] downloadCsvWithProgress() 메서드
-- [x] deleteFile() 메서드
-- [x] InsufficientPointsException 예외 클래스
-- [x] PdfServiceException 예외 클래스
-
-**pdf_providers.dart:**
-- [x] pdfServiceProvider
-- [x] pdfFilesProvider
-- [x] pdfFileProvider
-- [x] pdfConversionStatusProvider
-- [x] conversionProgressProvider
-- [x] pdfDownloadProvider
-
----
-
-## 🧪 Backend 테스트 시나리오
-
-### 테스트 1: 파일 업로드 후 상태 확인
-
-```bash
-# 1. PDF 파일 업로드
-curl -X POST \
-  -H "Authorization: Bearer TOKEN" \
-  -F "file=@test.pdf" \
-  https://api.example.com/api/v1/pdf/upload
-
-# 예상 응답:
-{
-  "file_id": "abc-123",
-  "original_filename": "test.pdf",
-  "status": "uploaded",  # ← 이 값이 "uploaded"여야 함
-  "file_size_bytes": 1024,
-  "created_at": "2026-03-04T...",
-  ...
-}
+### TC-B01-06: board 상세 조회는 인증 사용자의 user_id를 서비스로 전달한다
+```python
+response = client.get(
+    f"/api/v1/board/posts/{post_id}",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer test-token"},
+)
+assert response.status_code == 200
+assert captured["user_id"] is not None
 ```
 
-### 테스트 2: 포인트 부족 시 402 응답
-
-```bash
-# 1. 포인트가 0인 사용자로 변환 요청
-curl -X POST \
-  -H "Authorization: Bearer USER_TOKEN_WITH_0_POINTS" \
-  https://api.example.com/api/v1/pdf/abc-123/convert
-
-# 예상 응답 (HTTP 402):
-{
-  "detail": "포인트가 부족합니다. 필요: 10, 잔액: 0"
-}
+### TC-BL04-04: blog feed 조회는 인증이 없으면 거부된다
+```python
+response = client.get(
+    "/api/v1/blog/feed",
+    headers={"X-API-Key": "test_key"},
+)
+assert response.status_code in [401, 422]
 ```
 
-### 테스트 3: 정상 변환 플로우
-
-```bash
-# 1. 충분한 포인트가 있는 사용자로 변환 요청
-curl -X POST \
-  -H "Authorization: Bearer USER_TOKEN_WITH_100_POINTS" \
-  https://api.example.com/api/v1/pdf/abc-123/convert
-
-# 예상 응답 (HTTP 202):
-{
-  "file_id": "abc-123",
-  "status": "processing",
-  "message": "변환이 시작되었습니다..."
-}
-
-# 2. 상태 확인 (폴링)
-curl -X GET \
-  -H "Authorization: Bearer TOKEN" \
-  https://api.example.com/api/v1/pdf/abc-123/status
-
-# 변환 중:
-{
-  "file_id": "abc-123",
-  "status": "processing",
-  "message": "변환 중입니다..."
-}
-
-# 변환 완료:
-{
-  "file_id": "abc-123",
-  "status": "processed",
-  "conversion_cost": 10,  # ← 포인트 10이 차감됨
-  "output_path": "path/to/output.csv",
-  "message": "변환이 완료되었습니다."
-}
+### TC-BL04-05: blog feed 조회는 인증 사용자의 user_id를 좋아요 판별에 전달한다
+```python
+response = client.get(
+    "/api/v1/blog/feed",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer test-token"},
+)
+assert response.status_code == 200
+assert captured["user_id"] is not None
 ```
 
-### 테스트 4: 파일 다운로드
-
-```bash
-# 1. CSV 파일 다운로드
-curl -X GET \
-  -H "Authorization: Bearer TOKEN" \
-  https://api.example.com/api/v1/pdf/abc-123/download \
-  -o result.csv
-
-# 예상 응답:
-# - HTTP 200
-# - Content-Type: text/csv
-# - Content-Disposition: attachment; filename*=UTF-8''test.csv
+### TC-BL05-03: blog 상세 조회는 인증 사용자의 user_id를 좋아요 판별에 전달한다
+```python
+response = client.get(
+    f"/api/v1/blog/posts/{post_id}",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer test-token"},
+)
+assert response.status_code == 200
+assert captured["user_id"] is not None
 ```
 
-### 테스트 5: 포인트 차감 확인
-
-```bash
-# 변환 전 사용자 포인트 확인
-curl -X GET \
-  -H "Authorization: Bearer TOKEN" \
-  https://api.example.com/api/v1/users/me
-
-# Response: { "points": 100, ... }
-
-# 변환 완료 후 사용자 포인트 확인
-curl -X GET \
-  -H "Authorization: Bearer TOKEN" \
-  https://api.example.com/api/v1/users/me
-
-# Response: { "points": 90, ... }  ← 10점 차감됨
+### TC-PDF-SEC-01: PDF 업로드는 API Key 없이 접근할 수 없다
+```python
+response = client.post("/api/v1/pdf/upload")
+assert response.status_code in [401, 422]
 ```
 
----
-
-## 🔐 보안 검증
-
-### 소유권 검증
-```bash
-# 다른 사용자의 파일 다운로드 시도
-curl -X GET \
-  -H "Authorization: Bearer USER_2_TOKEN" \
-  https://api.example.com/api/v1/pdf/USER_1_FILE_ID/download
-
-# 예상 응답 (HTTP 403):
-{
-  "detail": "접근 권한이 없습니다."
-}
+### TC-USER-SEC-01: 사용자 프로필 단건 조회는 공개가 아니다
+```python
+response = client.get("/api/v1/users/{user_id}")
+assert response.status_code in [401, 422]
 ```
 
-### 상태 검증
-```bash
-# 아직 변환 중인 파일 다운로드 시도
-curl -X GET \
-  -H "Authorization: Bearer TOKEN" \
-  https://api.example.com/api/v1/pdf/abc-123/download
-
-# 예상 응답 (HTTP 409):
-{
-  "detail": "변환이 완료되지 않았습니다."
-}
+### TC-AUTH-REMOVED-01: legacy register/login 경로는 제거되어야 한다
+```python
+assert client.post("/api/v1/auth/register", json=payload).status_code == 404
+assert client.post("/api/v1/auth/login", json=payload).status_code == 404
 ```
 
----
-
-## 🐛 문제 해결
-
-### Backend 테스트
-
-**에러 1: "PointService not imported"**
-- 확인: `app/api/v1/endpoints/pdf/convert.py` 라인 15에 import 있는지 확인
-
-**에러 2: "FileStatus not imported" (files.py)**
-- 확인: `app/api/v1/endpoints/pdf/files.py` 라인 11에 import 있는지 확인
-
-**에러 3: "quote not imported"**
-- 확인: `app/api/v1/endpoints/pdf/convert.py` 라인 5에서 urllib.parse import 확인
-
-**에러 4: "StreamingResponse not imported"**
-- 확인: `app/api/v1/endpoints/pdf/convert.py` 라인 7에 fastapi.responses import 확인
-
-### Database 확인
-
-```bash
-# PDF 파일 생성 후 상태 확인 (DB)
-sqlite3 database.db "SELECT file_id, status FROM pdf_files ORDER BY created_at DESC LIMIT 1;"
-
-# 예상 결과:
-# file_id | status
-# abc-123 | uploaded
+### TC-AUTH-COMMON-REFRESH-01: 공통 refresh 엔드포인트는 제거 대상이 아니며 헤더 검증을 통과해야 한다
+```python
+response = client.post("/api/v1/auth/refresh")
+assert response.status_code in [401, 422]
 ```
 
----
-
-## 📝 요약
-
-모든 구현이 완료되었습니다. 다음 단계:
-
-1. **Backend 테스트**: 위 테스트 시나리오 실행
-2. **Flutter 통합**: `flutter-pdf-code/` 파일들을 Flutter 프로젝트에 복사
-3. **E2E 테스트**: 전체 플로우 (업로드 → 변환 → 다운로드) 검증
-
----
-
-## 📦 파일 크기 및 라인 수
-
-```
-Backend:
-  app/api/v1/endpoints/pdf/files.py  ← +12 라인 (상태 전환 추가)
-  app/api/v1/endpoints/pdf/convert.py ← +85 라인 (포인트 + 다운로드)
-
-Flutter:
-  flutter-pdf-code/pdf_models.dart      (100줄)
-  flutter-pdf-code/pdf_service.dart     (177줄)
-  flutter-pdf-code/pdf_providers.dart   (248줄)
+### TC-CONTENT-SEC-01: 인증된 사용자는 타인 board/blog 콘텐츠를 조회할 수 있다
+```python
+board_response = client.get(
+    "/api/v1/board/posts",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer viewer-token"},
+)
+blog_response = client.get(
+    f"/api/v1/blog/users/{author_id}",
+    headers={"X-API-Key": "test_key", "X-Platform": "mobile", "Authorization": "Bearer viewer-token"},
+)
+assert board_response.status_code == 200
+assert blog_response.status_code == 200
 ```
 
----
+### TC-RL-01: 공통 rate-limit helper는 429와 Retry-After를 반환한다
+```python
+with pytest.raises(HTTPException) as exc_info:
+    await enforce_rate_limit(
+        scope="test:scope",
+        identifier="user:123",
+        limit=2,
+        window_seconds=60,
+        detail="too many requests",
+    )
+assert exc_info.value.status_code == 429
+assert "Retry-After" in exc_info.value.headers
+```
 
-**상태**: ✅ 구현 완료
-**검증**: 준비 완료
-**배포**: 테스트 후 진행 가능
+### TC-RL-02: 모바일 로그인은 분당 10회/IP를 초과하면 차단된다
+```python
+for _ in range(10):
+    assert client.post("/api/v1/auth/login/mobile", headers=headers).status_code == 200
+
+limited_response = client.post("/api/v1/auth/login/mobile", headers=headers)
+assert limited_response.status_code == 429
+assert "Retry-After" in limited_response.headers
+```
+
+### TC-RL-03: coin simulator 제어 rate limit은 Retry-After를 포함한다
+```python
+limited_response = client.post("/api/v1/coin-simulator/start", headers=headers)
+assert limited_response.status_code == 429
+assert "Retry-After" in limited_response.headers
+```
+
+### TC-RL-04: board 목록 조회는 계정 기준 조회 rate limit을 초과하면 차단된다
+```python
+for _ in range(120):
+    assert client.get("/api/v1/board/posts", headers=headers).status_code == 200
+
+limited_response = client.get("/api/v1/board/posts", headers=headers)
+assert limited_response.status_code == 429
+assert "Retry-After" in limited_response.headers
+```
+
+### TC-RL-05: ledger root 조회는 계정 기준 조회 rate limit을 초과하면 차단된다
+```python
+for _ in range(120):
+    assert client.get("/api/v1/verify/root/2026-03-18", headers=headers).status_code == 200
+
+limited_response = client.get("/api/v1/verify/root/2026-03-18", headers=headers)
+assert limited_response.status_code == 429
+assert "Retry-After" in limited_response.headers
+```
+
+### TC-CHAT-RESP-01: 채팅 메시지 응답은 표시용 `sender_name`을 포함한다
+```python
+response = client.get(f"/api/v1/chat/rooms/{room_id}/messages", headers=headers)
+assert response.status_code == 200
+assert "sender_name" in response.json()["items"][0]
+```
+
+### TC-BOARD-COMMENT-RESP-01: 게시판 댓글 작성자 응답은 `nickname`을 포함한다
+```python
+response = client.get(f"/api/v1/board/{post_id}/comments", headers=headers)
+assert response.status_code == 200
+assert "nickname" in response.json()[0]["author"]
+```
+
+### TC-P02-01: FCM 토큰 갱신은 token UUID를 사용한다
+```python
+token_id = uuid4()
+response = client.put(
+    f"/api/v1/push/tokens/{token_id}",
+    json={"platform": "ios", "device_name": "iPhone"},
+    headers=auth_headers,
+)
+assert response.status_code == 200
+assert response.json()["id"] == str(token_id)
+```
+
+### TC-P03-01: FCM 토큰 삭제는 현재 사용자 소유 토큰만 허용한다
+```python
+response = client.delete(
+    "/api/v1/push/tokens/test_token_to_remove",
+    headers=auth_headers,
+)
+assert response.status_code == 204
+```
+
+### TC-P08-01: 알림 삭제 엔드포인트가 정상 응답한다
+```python
+notification_id = uuid4()
+response = client.delete(
+    f"/api/v1/push/notifications/{notification_id}",
+    headers=auth_headers,
+)
+assert response.status_code in [204, 404]
+```

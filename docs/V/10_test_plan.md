@@ -242,3 +242,15 @@ locust -f tests/performance/locustfile.py --host=http://localhost:8000
 
 - [V/20_test_cases.md](20_test_cases.md) — 상세 테스트 케이스 코드
 - [R/40_traceability.md](../R/40_traceability.md) — 유저 스토리 ↔ 테스트 연결
+
+---
+
+## Execution Result (2026-03-20 push endpoint alignment)
+
+1. Command: `python -m py_compile app/api/v1/endpoints/push.py app/domain/push/services/push_service.py tests/conftest.py`
+   - Result: PASS
+2. Command: `.venv/bin/pytest -q tests/test_push_endpoints.py`
+   - Result: PASS (21 passed)
+3. Notes:
+   - 토큰 삭제는 인증 사용자 소유 토큰만 처리하도록 보강
+   - 알림 삭제 엔드포인트와 토큰 갱신 계약을 앱 구현 기준으로 정렬

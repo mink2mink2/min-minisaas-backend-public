@@ -65,15 +65,16 @@ class PushService:
     async def update_token(
         self,
         user_id: UUID,
-        token: str,
+        token_id: UUID,
         platform: str,
+        device_name: Optional[str] = None,
     ) -> Optional[FcmToken]:
         """FCM 토큰 업데이트"""
         result = await self.db.execute(
             select(FcmToken).where(
                 and_(
                     FcmToken.user_id == user_id,
-                    FcmToken.token == token,
+                    FcmToken.id == token_id,
                 )
             )
         )
@@ -82,16 +83,23 @@ class PushService:
         if fcm_token:
             fcm_token.is_active = True
             fcm_token.platform = platform.lower()
+            if device_name is not None:
+              fcm_token.device_name = device_name.strip() or None
             await self.db.commit()
             await self.db.refresh(fcm_token)
             return fcm_token
 
         return None
 
-    async def remove_token(self, token: str) -> bool:
+    async def remove_token(self, user_id: UUID, token: str) -> bool:
         """FCM 토큰 제거"""
         result = await self.db.execute(
-            select(FcmToken).where(FcmToken.token == token)
+            select(FcmToken).where(
+                and_(
+                    FcmToken.user_id == user_id,
+                    FcmToken.token == token,
+                )
+            )
         )
         fcm_token = result.scalar_one_or_none()
 
@@ -327,10 +335,15 @@ class PushService:
         )
         return result.scalar() or 0
 
-    async def mark_as_read(self, notification_id: UUID) -> bool:
+    async def mark_as_read(self, user_id: UUID, notification_id: UUID) -> bool:
         """알림을 읽음으로 표시"""
         result = await self.db.execute(
-            select(PushNotification).where(PushNotification.id == notification_id)
+            select(PushNotification).where(
+                and_(
+                    PushNotification.id == notification_id,
+                    PushNotification.user_id == user_id,
+                )
+            )
         )
         notification = result.scalar_one_or_none()
 
@@ -356,10 +369,15 @@ class PushService:
         await self.db.commit()
         return result.rowcount
 
-    async def delete_notification(self, notification_id: UUID) -> bool:
+    async def delete_notification(self, user_id: UUID, notification_id: UUID) -> bool:
         """알림 삭제"""
         result = await self.db.execute(
-            select(PushNotification).where(PushNotification.id == notification_id)
+            select(PushNotification).where(
+                and_(
+                    PushNotification.id == notification_id,
+                    PushNotification.user_id == user_id,
+                )
+            )
         )
         notification = result.scalar_one_or_none()
 
